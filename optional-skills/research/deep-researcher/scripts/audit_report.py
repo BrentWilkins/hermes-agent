@@ -174,17 +174,10 @@ def normalize_for_match(url: str) -> str:
     return f"{parts.scheme.lower()}://{parts.netloc.lower()}{path}"
 
 
-def run(args: argparse.Namespace) -> int:  # health: allow CC -- vendored upstream (BrentWilkins/research-skills)
-    path = Path(args.report).expanduser()
-    if not path.exists():
-        print(f"ERROR: report not found: {path}")
-        return 1
-    body, bibliography_lines = split_document(path.read_text(encoding="utf-8"))
-    cited = citations_in(body)
-    entries, parse_errors = bibliography_entries(bibliography_lines)
-    errors = list(parse_errors)
-    warnings: list[str] = []
-
+def _audit_citations(
+    cited: set[int], entries: dict[int, str], bibliography_lines: list[str],
+    errors: list[str], warnings: list[str]
+) -> None:
     if not bibliography_lines:
         errors.append(
             "No 'Citation Links', 'References', or 'Bibliography' section found."
@@ -207,6 +200,11 @@ def run(args: argparse.Namespace) -> int:  # health: allow CC -- vendored upstre
         if gaps:
             warnings.append(f"Bibliography numbering has gaps: {gaps}.")
 
+
+
+def _audit_source_distribution(
+    entries: dict[int, str], errors: list[str], warnings: list[str]
+) -> Counter[str]:
     domains = Counter(urlsplit(url).hostname or "" for url in entries.values())
     if len(entries) >= 5 and domains:
         domain, count = domains.most_common(1)[0]
@@ -221,38 +219,49 @@ def run(args: argparse.Namespace) -> int:  # health: allow CC -- vendored upstre
         if len(numbers) > 1:
             errors.append(f"Duplicate bibliography URL in entries {numbers}: {url}")
 
+    return domains
+
+
+def _audit_uncited_content(body: str, max_warnings: int, warnings: list[str]) -> None:
     analysis_text = analytical_body(body)
     factual = candidate_factual_lines(analysis_text)
-    for line_number, preview in factual[: args.max_heuristic_warnings]:
+    for line_number, preview in factual[: max_warnings]:
         warnings.append(
             f"Possibly uncited factual claim at line {line_number}: {preview}"
         )
-    if len(factual) > args.max_heuristic_warnings:
+    if len(factual) > max_warnings:
         warnings.append(
-            f"{len(factual) - args.max_heuristic_warnings} additional possibly uncited lines suppressed."
+            f"{len(factual) - max_warnings} additional possibly uncited lines suppressed."
         )
     for line_number, preview in uncited_analytical_rows(analysis_text)[
-        : args.max_heuristic_warnings
+        : max_warnings
     ]:
         warnings.append(
             f"Possibly uncited analytical table row at line {line_number}: {preview}"
         )
 
-    if args.ledger:
-        try:
-            evidence_urls = {
-                normalize_for_match(url)
-                for url in ledger_urls(Path(args.ledger).expanduser())
-                if url
-            }
-            for number, url in entries.items():
-                if normalize_for_match(url) not in evidence_urls:
-                    errors.append(
-                        f"Bibliography entry [{number}] is absent from the evidence ledger."
-                    )
-        except (OSError, json.JSONDecodeError, TypeError) as exc:
-            errors.append(f"Could not read evidence ledger: {exc}")
 
+
+def _audit_ledger(entries: dict[int, str], ledger_path: str, errors: list[str]) -> None:
+    try:
+        evidence_urls = {
+            normalize_for_match(url)
+            for url in ledger_urls(Path(ledger_path).expanduser())
+            if url
+        }
+        for number, url in entries.items():
+            if normalize_for_match(url) not in evidence_urls:
+                errors.append(
+                    f"Bibliography entry [{number}] is absent from the evidence ledger."
+                )
+    except (OSError, json.JSONDecodeError, TypeError) as exc:
+        errors.append(f"Could not read evidence ledger: {exc}")
+
+
+
+def _audit_live_links(
+    entries: dict[int, str], args: argparse.Namespace, errors: list[str], warnings: list[str]
+) -> list[LinkResult]:
     link_results: list[LinkResult] = []
     if not args.no_live and entries:
         with concurrent.futures.ThreadPoolExecutor(
@@ -271,6 +280,13 @@ def run(args: argparse.Namespace) -> int:  # health: allow CC -- vendored upstre
             elif result.severity == "warning":
                 warnings.append(message)
 
+    return link_results
+
+
+def _print_audit(
+    path: Path, cited: set[int], entries: dict[int, str], domains: Counter[str],
+    link_results: list[LinkResult], errors: list[str], warnings: list[str]
+) -> None:
     print(f"Report audit: {path.name}")
     print(f"  Body citations: {len(cited)} unique")
     print(f"  Bibliography:   {len(entries)} entries across {len(domains)} domain(s)")
@@ -288,6 +304,25 @@ def run(args: argparse.Namespace) -> int:  # health: allow CC -- vendored upstre
         print(f"PASS WITH WARNINGS: {len(warnings)} item(s) require review.")
     else:
         print(f"FAIL: {len(errors)} error(s), {len(warnings)} warning(s).")
+
+
+def run(args: argparse.Namespace) -> int:
+    path = Path(args.report).expanduser()
+    if not path.exists():
+        print(f"ERROR: report not found: {path}")
+        return 1
+    body, bibliography_lines = split_document(path.read_text(encoding="utf-8"))
+    cited = citations_in(body)
+    entries, parse_errors = bibliography_entries(bibliography_lines)
+    errors = list(parse_errors)
+    warnings: list[str] = []
+    _audit_citations(cited, entries, bibliography_lines, errors, warnings)
+    domains = _audit_source_distribution(entries, errors, warnings)
+    _audit_uncited_content(body, args.max_heuristic_warnings, warnings)
+    if args.ledger:
+        _audit_ledger(entries, args.ledger, errors)
+    link_results = _audit_live_links(entries, args, errors, warnings)
+    _print_audit(path, cited, entries, domains, link_results, errors, warnings)
     return 1 if errors else 0
 
 

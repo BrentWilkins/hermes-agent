@@ -203,15 +203,11 @@ def cmd_add_claim(args: argparse.Namespace) -> None:
     print(f"Added claim {claim['id']} ({claim['status']})")
 
 
-def validate(data: dict[str, Any]) -> tuple[list[str], list[str]]:  # health: allow CC -- vendored upstream (BrentWilkins/research-skills)
-    errors: list[str] = []
-    warnings: list[str] = []
-    source_ids = [source.get("id") for source in data.get("sources", [])]
-    source_id_set = set(source_ids)
-    if len(source_ids) != len(source_id_set):
-        errors.append("Duplicate source IDs exist.")
+def _validate_sources(
+    sources: list[dict[str, Any]], errors: list[str], warnings: list[str]
+) -> None:
     canonical_seen: dict[str, int] = {}
-    for source in data.get("sources", []):
+    for source in sources:
         if source.get("source_type") not in SOURCE_TYPES:
             errors.append(
                 f"Source [{source.get('id', '?')}] has invalid source_type {source.get('source_type')!r}."
@@ -242,9 +238,13 @@ def validate(data: dict[str, Any]) -> tuple[list[str], list[str]]:  # health: al
             warnings.append(
                 f"Source [{source.get('id')}] has an excerpt over 500 characters; retain only decisive wording."
             )
-    question_set = set(data.get("research_questions", []))
+
+
+def _validate_question_coverage(
+    sources: list[dict[str, Any]], question_set: set[str], warnings: list[str]
+) -> None:
     question_sources = {question: set() for question in question_set}
-    for source in data.get("sources", []):
+    for source in sources:
         for question in source.get("questions", []):
             if question not in question_set:
                 warnings.append(
@@ -257,11 +257,18 @@ def validate(data: dict[str, Any]) -> tuple[list[str], list[str]]:  # health: al
             warnings.append(
                 f"Research question {question!r} has fewer than two extracted sources."
             )
-    claim_ids = [claim.get("id") for claim in data.get("claims", [])]
+
+
+def _validate_claims(
+    claims: list[dict[str, Any]], sources: list[dict[str, Any]],
+    question_set: set[str], errors: list[str], warnings: list[str]
+) -> None:
+    source_id_set = {source.get("id") for source in sources}
+    claim_ids = [claim.get("id") for claim in claims]
     if len(claim_ids) != len(set(claim_ids)):
         errors.append("Duplicate claim IDs exist.")
-    source_by_id = {source.get("id"): source for source in data.get("sources", [])}
-    for claim in data.get("claims", []):
+    source_by_id = {source.get("id"): source for source in sources}
+    for claim in claims:
         claim_id = claim.get("id", "?")
         supporting = set(claim.get("source_ids", []))
         counter = set(claim.get("counter_source_ids", []))
@@ -303,7 +310,7 @@ def validate(data: dict[str, Any]) -> tuple[list[str], list[str]]:  # health: al
             )
         groups = {
             source.get("independence_group")
-            for source in data.get("sources", [])
+            for source in sources
             if source.get("id") in supporting
             and source.get("independence_assessed") is True
             and source.get("independence_note", "").strip()
@@ -317,8 +324,14 @@ def validate(data: dict[str, Any]) -> tuple[list[str], list[str]]:  # health: al
             warnings.append(
                 f"Disputed claim {claim_id} has no counter-evidence source."
             )
+
+
+def _validate_evidence(
+    sources: list[dict[str, Any]], claims: list[dict[str, Any]],
+    errors: list[str], warnings: list[str]
+) -> None:
     evidence_by_id = {}
-    for source in data.get("sources", []):
+    for source in sources:
         if source.get("independence_assessed") is not True:
             warnings.append(f"Source [{source.get('id')}] independence is unverified.")
         for item in source.get("evidence", []):
@@ -330,7 +343,7 @@ def validate(data: dict[str, Any]) -> tuple[list[str], list[str]]:  # health: al
                 errors.append(f"Evidence {evidence_id} needs an excerpt and locator.")
             if len(item.get("excerpt", "")) > 500:
                 warnings.append(f"Evidence {evidence_id} exceeds 500 characters; keep only the relevant passage.")
-    for claim in data.get("claims", []):
+    for claim in claims:
         cited_sources = set(claim.get("source_ids", []) + claim.get("counter_source_ids", []))
         if cited_sources and not claim.get("evidence_ids"):
             warnings.append(f"Claim {claim.get('id')} has no precise evidence links.")
@@ -340,6 +353,21 @@ def validate(data: dict[str, Any]) -> tuple[list[str], list[str]]:  # health: al
         located_sources = {evidence_by_id[item] for item in claim.get("evidence_ids", []) if item in evidence_by_id}
         if cited_sources - located_sources:
             warnings.append(f"Claim {claim.get('id')} lacks precise passages for sources {sorted(cited_sources - located_sources)}.")
+
+
+def validate(data: dict[str, Any]) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    sources = data.get("sources", [])
+    claims = data.get("claims", [])
+    source_ids = [source.get("id") for source in sources]
+    if len(source_ids) != len(set(source_ids)):
+        errors.append("Duplicate source IDs exist.")
+    question_set = set(data.get("research_questions", []))
+    _validate_sources(sources, errors, warnings)
+    _validate_question_coverage(sources, question_set, warnings)
+    _validate_claims(claims, sources, question_set, errors, warnings)
+    _validate_evidence(sources, claims, errors, warnings)
     return errors, warnings
 
 

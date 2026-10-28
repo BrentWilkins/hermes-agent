@@ -61,6 +61,26 @@ class ResearchTests(unittest.TestCase):
         return self.cli("evidence_ledger.py", "add-claim", self.path, "--text", "Narrow claim",
                         "--question", "Q1", "--status", "supported", "--source", "1,2", *args)
 
+    def test_claim_validation_rejects_unretrieved_and_conflicting_sources(self):
+        self.init_ledger()
+        self.add_source("https://example.com/a")
+        self.add_source("https://example.org/b", "--extraction-status", "failed")
+        self.claim("--counter-source", "2")
+        errors, _ = ledger.validate(ledger.read_ledger(self.path))
+        self.assertTrue(any("both support and counter-evidence" in item for item in errors))
+        self.assertTrue(any("were not extracted: [2]" in item for item in errors))
+
+    def test_report_audit_reports_missing_and_duplicate_references(self):
+        report = self.base / "report.md"
+        report.write_text(
+            "# Fixture\n\nA finding. [1] [3]\n\n## References\n\n"
+            "1. [First](https://example.com/a)\n"
+            "2. [Duplicate](https://example.com/a)\n", encoding="utf-8")
+        result = self.cli("audit_report.py", report, "--no-live", success=False)
+        self.assertIn("Citation [3] is used in the body but missing", result.stdout)
+        self.assertIn("Duplicate bibliography URL in entries [1, 2]", result.stdout)
+        self.assertIn("Bibliography entry [2] is never cited", result.stdout)
+
     def test_domains_are_not_independence(self):
         self.init_ledger()
         self.add_source("https://example.com/a")
