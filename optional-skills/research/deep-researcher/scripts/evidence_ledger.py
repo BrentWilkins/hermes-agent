@@ -203,7 +203,7 @@ def cmd_add_claim(args: argparse.Namespace) -> None:
     print(f"Added claim {claim['id']} ({claim['status']})")
 
 
-def validate(data: dict[str, Any]) -> tuple[list[str], list[str]]:
+def validate(data: dict[str, Any]) -> tuple[list[str], list[str]]:  # health: allow CC -- vendored upstream (BrentWilkins/research-skills)
     errors: list[str] = []
     warnings: list[str] = []
     source_ids = [source.get("id") for source in data.get("sources", [])]
