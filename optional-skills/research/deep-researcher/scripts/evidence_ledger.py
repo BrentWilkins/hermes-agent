@@ -112,9 +112,7 @@ def resolve_question(data: dict[str, Any], value: str) -> str:
     raise SystemExit(f"ERROR: unknown research question {value!r}; known: {questions}")
 
 
-def cmd_add_source(args: argparse.Namespace) -> None:
-    path = Path(args.ledger).expanduser()
-    data = read_ledger(path)
+def make_source(data: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
     normalized = canonical_url(args.url)
     for source in data["sources"]:
         if source["canonical_url"] == normalized:
@@ -157,9 +155,16 @@ def cmd_add_source(args: argparse.Namespace) -> None:
             "id": f"S{source_id}E{index}",
             "excerpt": item["excerpt"], "locator": item["locator"],
         })
+    return source
+
+
+def cmd_add_source(args: argparse.Namespace) -> None:
+    path = Path(args.ledger).expanduser()
+    data = read_ledger(path)
+    source = make_source(data, args)
     data["sources"].append(source)
     write_ledger(path, data)
-    print(f"Added source [{source_id}] {args.title}")
+    print(f"Added source [{source['id']}] {args.title}")
 
 
 def parse_source_ids(values: list[str]) -> list[int]:
@@ -172,9 +177,7 @@ def parse_source_ids(values: list[str]) -> list[int]:
     return sorted(set(result))
 
 
-def cmd_add_claim(args: argparse.Namespace) -> None:
-    path = Path(args.ledger).expanduser()
-    data = read_ledger(path)
+def make_claim(data: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
     claim_number = (
         max(
             (
@@ -198,6 +201,13 @@ def cmd_add_claim(args: argparse.Namespace) -> None:
         "caveat": args.caveat or "",
         "evidence_ids": args.evidence,
     }
+    return claim
+
+
+def cmd_add_claim(args: argparse.Namespace) -> None:
+    path = Path(args.ledger).expanduser()
+    data = read_ledger(path)
+    claim = make_claim(data, args)
     data["claims"].append(claim)
     write_ledger(path, data)
     print(f"Added claim {claim['id']} ({claim['status']})")
@@ -508,12 +518,20 @@ def build_parser() -> argparse.ArgumentParser:
     brief.add_argument("ledger")
     brief.add_argument("--max-chars", type=int, default=24000, help="Maximum brief characters, including truncation notice")
     brief.set_defaults(func=cmd_brief)
+    batch = subparsers.add_parser("add-batch", help="Atomically add a JSON batch with stable keys and idempotent retries")
+    batch.add_argument("ledger")
+    batch.add_argument("payload", help="Path to the batch JSON file")
+    from evidence_batch import command
+    batch.set_defaults(func=command)
     return parser
 
 
 def main() -> None:
     args = build_parser().parse_args()
-    args.func(args)
+    try:
+        args.func(args)
+    except (ValueError, OSError, KeyError) as exc:
+        raise SystemExit(f"ERROR: {exc}") from exc
 
 
 if __name__ == "__main__":

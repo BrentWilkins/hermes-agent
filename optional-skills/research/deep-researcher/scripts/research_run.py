@@ -9,11 +9,13 @@ import os
 from pathlib import Path, PurePosixPath
 import tempfile
 import zipfile
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
+
+from run_budget import GAP_ALLOWANCE, PLANS
 
 KIND = "deep-research-run-v1"
 MANIFEST = "run_manifest.json"
-DEFAULTS = {"quick": 4, "standard": 8, "deep": 12}
+DEFAULTS = PLANS["direct"]
 
 
 def now():
@@ -84,14 +86,15 @@ def init(args):
     data = {
         "kind": KIND, "created_at": now(), "status": "active",
         "question": args.question, "scope": args.scope, "mode": args.mode,
-        "assumptions": args.assumption,
-        "budgets": {"search_calls": args.search_budget or DEFAULTS[args.mode],
-                    "storage_bytes": args.storage_mb * 1024 * 1024},
+        "assumptions": args.assumption, "execution": args.execution, "searches": [],
+        "budgets": {"search_calls": args.search_budget or PLANS[args.execution][args.mode],
+                    "gap_search_calls": GAP_ALLOWANCE, "storage_bytes": args.storage_mb * 1024 * 1024},
         "completed": [], "gaps": [], "next_action": "Frame questions and initialize evidence.json",
         "artifacts": [MANIFEST], "report": "report.md",
     }
     save(root, data)
     print(f"Created {root}")
+    status(args)
 
 
 def checkpoint(args):
@@ -116,11 +119,11 @@ def checkpoint(args):
     if args.clear_gaps:
         data["gaps"] = []
     if data["status"] == "complete":
-        report = safe_path(root, data["report"])
-        if not report.is_file() or not report.stat().st_size:
-            raise ValueError("Completion requires a nonempty report.md")
-        if data["report"] not in data["artifacts"]:
-            data["artifacts"].append(data["report"])
+        from completion_checks import require_completion
+        data["completion_checks"] = require_completion(root, data)
+        for name in (data["report"], "evidence.json", "evidence-brief.md", "semantic-review.json"):
+            if name not in data["artifacts"]:
+                data["artifacts"].append(name)
         data["next_action"] = ""
     save(root, data)
     status(args)
@@ -129,6 +132,8 @@ def checkpoint(args):
 def status(args):
     root = Path(args.run).expanduser()
     data = load(root)
+    from run_budget import usage
+    print("Search usage: " + json.dumps(usage(data)))
     total = sum(safe_path(root, name).stat().st_size
                 for name in data["artifacts"] if safe_path(root, name).exists())
     print(json.dumps({key: data[key] for key in
@@ -156,6 +161,8 @@ def archive(args):
     data = load(root)
     if data["status"] != "complete":
         raise ValueError("Only completed, inactive runs can be archived")
+    from completion_checks import require_completion
+    require_completion(root, data)
     report = safe_path(root, data["report"])
     if not report.is_file() or not report.stat().st_size:
         raise ValueError("A nonempty final report is required")
@@ -248,6 +255,7 @@ def main():
     command.add_argument("--question", required=True)
     command.add_argument("--scope", required=True)
     command.add_argument("--mode", choices=DEFAULTS, default="standard")
+    command.add_argument("--execution", choices=PLANS, default="direct")
     command.add_argument("--assumption", action="append", default=[])
     command.add_argument("--search-budget", type=positive)
     command.add_argument("--storage-mb", type=positive, default=64)
@@ -272,6 +280,8 @@ def main():
     command.add_argument("run")
     command.add_argument("destination")
     command.set_defaults(func=restore)
+    from run_budget import add_commands
+    add_commands(commands)
     args = parser.parse_args()
     try:
         args.func(args)

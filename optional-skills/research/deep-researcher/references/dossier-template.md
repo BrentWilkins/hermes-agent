@@ -89,3 +89,13 @@
 ---
 
 *Prepared with the Hermes Deep Researcher workflow. Citations establish provenance; confidence reflects evidence directness, independence, recency, and methodological transparency.*
+
+
+## Review before completion
+
+Check whether each dataset/result is explicitly final, preliminary, partial, or
+unknown in the retained source; preserve its population and reporting period.
+Trace named organizations and acronym expansions to the source. Describe shared
+underlying origins explicitly; different publishers can repeat one dataset.
+Disclose single-origin limitations beside affected conclusions. Complete the
+hash-bound review in [workflow contracts](workflow-contracts.md) after revisions.

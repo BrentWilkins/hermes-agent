@@ -4,12 +4,12 @@ Use a new dedicated directory per run, outside the skill package. Replace SKILL 
 with actual absolute paths; do not assume shell variables survive across tool calls.
 
 ```sh
-python3 SKILL/scripts/research_run.py init RUN --question "Research question" --scope "Audience, timeframe, exclusions" --mode standard --storage-mb 64
+python3 SKILL/scripts/research_run.py init RUN --question "Research question" --scope "Audience, timeframe, exclusions" --mode standard --execution direct --storage-mb 64
 ```
 
 The manifest records assumptions, effective search/storage budgets, completed work, gaps,
 next action, and an explicit artifact inventory. `--search-budget` overrides the mode's
-default; repeat `--assumption` as needed. It contains no automatic environment/config dump.
+default for `--execution direct|batched`; repeat `--assumption` as needed. It contains no automatic environment/config dump.
 
 After initializing the ledger and collecting evidence:
 
@@ -22,11 +22,14 @@ Artifact arguments refer to existing individual files relative to RUN, not direc
 globs, external tool caches, or symlinks. Repeat `--artifact` for any intentionally retained
 source text or search log. Completed/gaps arguments replace their respective lists;
 omitting them preserves the previous state. `--clear-gaps` clears resolved gaps.
-Use the native file editor to revise scope, assumptions, or budgets in the manifest.
+Use the native file editor to revise scope or assumptions. Change query allowances
+with `research_run.py budget RUN --search-budget N --reason "Reason"`; spent queries
+are retained. See [search as code](search-as-code.md) for the query receipt protocol.
 
 To resume, read status and the brief first, then the ledger only as needed. Inspect whether
 time-sensitive evidence needs refreshing. Reuse completed work; do not rerun all searches.
-The manifest is a checkpoint, not an automatic search scheduler or spending meter.
+The manifest counts searches recorded through the helper protocol; it cannot observe
+unlogged calls or measure backend billing. Pending reservations must be reconciled.
 
 ## Prevent accumulation
 
@@ -44,8 +47,12 @@ The manifest is a checkpoint, not an automatic search scheduler or spending mete
 
 ## Complete and archive
 
-Finish the semantic and structural report audit before marking complete. Run completion
-checks that report.md is nonempty; it cannot verify that a human/agent performed the audit.
+Finish the semantic and structural report audit before marking complete. Completion
+requires report.md, a valid nonempty evidence.json, evidence-brief.md, cited-source
+summaries, precise linked passages, resolved query receipts, and a current
+semantic-review.json. Follow [workflow contracts](workflow-contracts.md) to prepare
+and review the packet. Old runs need those artifacts too. A recorded review is
+an attestation, not proof of truth. Archiving repeats the same gates.
 
 ```sh
 python3 SKILL/scripts/research_run.py checkpoint RUN --status complete --artifact report.md --artifact evidence.json --artifact evidence-brief.md

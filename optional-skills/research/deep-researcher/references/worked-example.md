@@ -21,3 +21,12 @@ For a counterargument, use `--counter-source` with its corresponding `--evidence
 
 Report wording: “The operator reported a shorter median in its pilot [1]. News coverage [2]
 repeats the same dataset. Independent replication was not found; generalizability is unresolved.”
+
+
+For atomic JSON ingestion of the same source/claim structure, use the batch schema
+in [workflow contracts](workflow-contracts.md); a source key can be reused by later
+claims without guessing numeric IDs. Save the derived brief, draft the report,
+and prepare the semantic review packet. Qualify the unresolved generalization with
+the limitation actually present in the report; do not approve it as verified.
+Review finality, shared origins, and names, then check the packet before completion.
+The dossier is not complete merely because the ledger command above succeeds.

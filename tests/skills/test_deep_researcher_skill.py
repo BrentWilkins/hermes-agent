@@ -8,6 +8,7 @@ import tempfile
 import unittest
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "optional-skills/research/deep-researcher/scripts"
+sys.path.insert(0, str(SCRIPTS))
 
 
 def module(name):
@@ -43,10 +44,36 @@ class ResearchTests(unittest.TestCase):
 
     def complete_run(self):
         self.init_run()
-        (self.root / "report.md").write_text("# Final report\nA synthetic finding.\n", encoding="utf-8")
-        (self.root / "evidence.json").write_text(json.dumps({"fixture": "evidence " * 10000}), encoding="utf-8")
+        self.cli("evidence_ledger.py", "init", self.root / "evidence.json",
+                 "--topic", "Fixture", "--question", "Q1: Synthetic question")
+        self.cli("evidence_ledger.py", "add-source", self.root / "evidence.json",
+                 "--url", "https://example.org/data", "--title", "Dataset",
+                 "--source-type", "primary", "--question", "Q1", "--summary", "Reports 10% growth.",
+                 "--evidence", json.dumps({"excerpt": "The dataset reports growth of 10%.",
+                                            "locator": "Results, paragraph 1"}))
+        self.cli("evidence_ledger.py", "add-claim", self.root / "evidence.json",
+                 "--text", "The dataset reports growth of 10%.", "--question", "Q1",
+                 "--status", "single-source", "--source", "1", "--evidence", "S1E1")
+        (self.root / "report.md").write_text(
+            "The dataset reports growth of 10%. [1]\n\nSingle-origin evidence.\n\n"
+            "## References\n1. [Dataset](https://example.org/data)\n", encoding="utf-8")
+        brief = self.cli("evidence_ledger.py", "brief", self.root / "evidence.json").stdout
+        (self.root / "evidence-brief.md").write_text(brief, encoding="utf-8")
+        self.cli("semantic_review.py", "prepare", self.root)
+        review_path = self.root / "semantic-review.json"
+        review = json.loads(review_path.read_text())
+        review["reviewer"] = "Synthetic archive fixture reviewer"
+        for check in review["checks"].values():
+            check.update(status="checked", note="Reviewed synthetic report and passages.")
+        for claim in review["claims"]:
+            claim.update(status="verified", note="The linked passage states the numeric result.")
+        for assertion in review["assertions"]:
+            assertion.update(status="qualified", qualification="Single-origin evidence.",
+                             note="Independent corroboration is not asserted.")
+        review_path.write_text(json.dumps(review), encoding="utf-8")
+        (self.root / "raw.txt").write_text("Synthetic retained text.\n" * 10000, encoding="utf-8")
         self.cli("research_run.py", "checkpoint", self.root, "--status", "complete",
-                 "--artifact", "evidence.json")
+                 "--artifact", "raw.txt")
 
     def init_ledger(self):
         self.path = self.base / "evidence.json"
@@ -105,7 +132,7 @@ class ResearchTests(unittest.TestCase):
         self.assertFalse((self.root / "evidence.json").exists())
         self.assertEqual((self.root / "report.md").read_bytes(), before["report.md"])
         self.assertTrue((self.root / "unregistered.txt").exists())
-        self.assertLess((self.root / "artifacts.zip").stat().st_size, len(before["evidence.json"]))
+        self.assertLess((self.root / "artifacts.zip").stat().st_size, sum(map(len, before.values())))
         destination = self.base / "restored"
         self.cli("research_run.py", "restore", self.root, destination)
         for name, content in before.items():

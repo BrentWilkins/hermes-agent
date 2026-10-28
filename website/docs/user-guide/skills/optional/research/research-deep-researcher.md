@@ -61,39 +61,25 @@ absolute directory and RUN with a new dedicated research directory; quote paths
 containing spaces. Use the available Python interpreter (`python3` below).
 
 ```sh
-python3 SKILL/scripts/research_run.py init RUN --question "Research question" --scope "Audience, timeframe, exclusions" --mode standard
+python3 SKILL/scripts/research_run.py init RUN --question "Research question" --scope "Audience, timeframe, exclusions" --mode standard --execution direct
 python3 SKILL/scripts/evidence_ledger.py init RUN/evidence.json --topic "Topic" --question "Q1: Question"
 ```
 
 ## Quick Reference
 
 - `research_run.py init|checkpoint|status`: initialize, save progress, or resume.
-- `evidence_ledger.py add-source|add-claim`: record passages and linked claims.
-- `evidence_ledger.py check|brief`: validate references and derive a compact brief.
+- `research_run.py budget|reserve-search|record-search`: persist the effective
+  allowance and actual query receipts before native retrieval.
+- `evidence_ledger.py add-batch LEDGER PAYLOAD`: validate and commit a retry-safe
+  JSON batch; [workflow contracts](https://github.com/NousResearch/hermes-agent/blob/main/optional-skills/research/deep-researcher/references/workflow-contracts.md) gives its schema.
+- `evidence_ledger.py add-source|add-claim`: individual additions remain available.
+- `evidence_ledger.py check|brief LEDGER`: validate and derive a compact brief.
+- `passages.py CACHE --term TEXT --max-chars 4000`: bounded literal character windows.
+- `semantic_review.py prepare|check RUN`: review claims and flagged assertions.
 - `audit_report.py REPORT --ledger LEDGER --no-live`: offline citation audit.
 - `research_run.py archive|restore`: verified lossless archival and recovery.
-- [Search as code](https://github.com/NousResearch/hermes-agent/blob/main/optional-skills/research/deep-researcher/references/search-as-code.md): one `execute_code` round fans out
-  every query, deduplicates canonical URLs, and prints only the shortlist; extraction
-  selects passages in code; a recording round writes the whole batch through the
-  ledger CLI; deep mode researches independent sub-questions in parallel. The
-  recording recipe lists every `add-source`/`add-claim` flag, so `--help` and
-  reading the scripts' source are unnecessary.
-
-All helpers live under `scripts/`. Signatures, so `--help` runs and reading script
-source are unnecessary:
-
-```text
-evidence_ledger.py init LEDGER --topic T --question "Q1: text" [--question "Q2: text" ...]
-evidence_ledger.py add-source LEDGER --url U --title T --source-type primary|secondary|commentary|community
-    --question Q1 [--summary S] [--published-date D] [--evidence '{"excerpt":"...","locator":"..."}' ...]
-    [--independence-group G --independence-note WHY] [--limitation L] [--extraction-status extracted|failed]
-evidence_ledger.py add-claim LEDGER --text T --question Q1 --status supported|disputed|single-source|unsupported
-    [--source 1,2] [--counter-source 3] [--evidence S1E1 ...] [--importance major|minor] [--caveat C] [--reasoning R]
-evidence_ledger.py check|brief LEDGER [--max-chars N]
-research_run.py checkpoint RUN [--status active|complete] [--artifact REL_PATH ...] [--completed X] [--gaps X]
-    [--clear-gaps] [--next-action X]
-audit_report.py REPORT --ledger LEDGER [--no-live]
-```
+- [Search as code](https://github.com/NousResearch/hermes-agent/blob/main/optional-skills/research/deep-researcher/references/search-as-code.md): tested native-tool discovery,
+  passage selection, recording, and recovery; no generated bookkeeping loops.
 
 `--question` takes the full question text or its leading ID (`Q1`). The report audit
 expects inline numeric markers (`[1]`, `[2-3]`) and a final `## References` (or
@@ -115,11 +101,12 @@ to absolute paths; commands below use SKILL and RUN as placeholders, not persist
 variables. Read [run management](https://github.com/NousResearch/hermes-agent/blob/main/optional-skills/research/deep-researcher/references/run-management.md) when initializing, resuming,
 or archiving a run.
 
-Planning defaults (override to match the task and record the effective values):
+Initialize with `--execution direct|batched`; use `--search-budget N` for an explicit
+allowance. The saved manifest and printed usage govern the plan. Planning defaults:
 - Quick: 4 queries one at a time, or 6 in one search-as-code round; about 4–6 useful sources.
 - Standard: 8 queries one at a time, or 16 across at most two rounds; about 8–15 useful sources.
 - Deep: 12 queries one at a time, or 40 across at most three rounds; about 15–25 useful
-  sources. Split independent sub-questions across parallel subagents (see search as code).
+  sources. Give independent workers distinct runs; never concurrently write one manifest.
 - The larger batched budgets apply only when queries run inside `execute_code`: results
   are filtered in code, so extra queries add coverage without adding raw snippets to context.
 - Stop after four search/extraction/gap-analysis iterations by default. An explicit zero
@@ -148,7 +135,10 @@ single-source exceptions. Deep mode also requires a counter-evidence search per 
    a reworded query is not a new evidence need. Stop discovery after two searches add no new
    credible canonical URLs. Synthesize or report the gap; do not silently raise budgets to
    avoid stopping. Record user-requested scope/budget changes in the run state.
-2. Keep a compact search log: query, gap, outcome, newly shortlisted URLs. Do not retain
+2. Reserve every query before native retrieval and record its result afterward, using
+   the helper protocol in [search as code](https://github.com/NousResearch/hermes-agent/blob/main/optional-skills/research/deep-researcher/references/search-as-code.md). Failed calls
+   consume allowance and remain failures, distinct from empty results. The manifest
+   retains query, gap, outcome, and candidate URLs. Do not retain
    repeated snippets as evidence. Favor primary evidence for facts and independent work
    for interpretation. Popularity and domain suffix are not quality scores.
    Assess directness, author authority, methodological transparency, independence, recency,
@@ -186,17 +176,17 @@ Initialize the run manifest first, then the ledger:
 python3 SKILL/scripts/evidence_ledger.py init RUN/evidence.json --topic "Topic" --question "Q1: Question"
 ```
 
-After each extraction batch, add concise source records and atomic claims using
-`evidence_ledger.py add-source` and `add-claim` (with `execute_code`, record the whole
-batch in one call: round 3 of [search as code](https://github.com/NousResearch/hermes-agent/blob/main/optional-skills/research/deep-researcher/references/search-as-code.md)). Never
-edit `evidence.json` by hand to add records; the CLI assigns IDs and validates links. See `--help` and the
-[worked example](https://github.com/NousResearch/hermes-agent/blob/main/optional-skills/research/deep-researcher/references/worked-example.md) for paired passages and locators.
+After each extraction batch, create a JSON payload with `write_file` and call
+`evidence_ledger.py add-batch RUN/evidence.json RUN/batch.json` through `terminal`.
+The helper assigns stable IDs and validates the whole staged ledger before saving;
+identical retries return the receipt, while changed retries fail. See
+[workflow contracts](https://github.com/NousResearch/hermes-agent/blob/main/optional-skills/research/deep-researcher/references/workflow-contracts.md) for fields and examples.
+Never add records by hand or generate subprocess loops to guess source IDs.
 
-- Use repeatable `--evidence '{"excerpt":"Exact short passage","locator":"Section/page/paragraph"}'`
-  on sources. Locators may include a registered run-relative cache path and line numbers.
-  Record a separate excerpt/locator pair for each passage.
-- Link claims with `--evidence S1E1` and the corresponding `--source 1` or
-  `--counter-source 1`. Evidence IDs remain stable within the ledger.
+- Record exact short excerpts with a page/section/paragraph locator and link claims
+  to those passage IDs. For flattened PDFs, use `passages.py` on native cached text
+  to retain bounded windows with exact character offsets; a first-line slice can
+  miss a decisive passage near the end of a huge line.
 - Independence starts unverified. Set both `--independence-group` and
   `--independence-note` only after tracing the underlying data or origin. Group IDs are
   assessments, not proof; the script cannot establish semantic independence.
@@ -245,11 +235,21 @@ or a clean script result does not establish semantic support.
 Fix structural errors, explain unresolved warnings, and remember that a blocked live link alone
 does not invalidate a source already retrieved. Revise once for accuracy and once for usefulness.
 
-Check the executive summary against the findings, revise, and mark the run complete only
-after the requested report and audit are finished. Then offer or perform lossless archiving
-when requested, using [run management](https://github.com/NousResearch/hermes-agent/blob/main/optional-skills/research/deep-researcher/references/run-management.md). Keep report.md readable.
-Compression reduces disk storage, not token usage; read selectively rather than inflating
-an archive into model context. Never archive an active run or prune unregistered artifacts.
+Check the executive summary against the findings, then run
+`semantic_review.py prepare RUN`. Review every claim and flagged assertion against
+the retained passages. Explicitly check final/preliminary/unknown status, independent
+origins, and named organizations/acronyms; review the rest of the report too.
+Complete the packet's reviewer, three global checks, and per-entry decisions using
+[workflow contracts](https://github.com/NousResearch/hermes-agent/blob/main/optional-skills/research/deep-researcher/references/workflow-contracts.md). Never blanket-approve entries.
+
+Run `semantic_review.py check RUN`, then
+`research_run.py checkpoint RUN --status complete`. Completion requires the report,
+valid nonempty ledger, brief, cited-source summaries, precise linked passages,
+resolved search receipts, citation audit, and current review. Disclosed single-origin
+limitations can pass; unsupported certainty cannot be cured by a clean script exit.
+Any report/ledger edit requires `prepare RUN --replace` and a fresh review.
+Archive only when requested, following [run management](https://github.com/NousResearch/hermes-agent/blob/main/optional-skills/research/deep-researcher/references/run-management.md).
+Archiving repeats completion checks; keep report.md readable.
 
 ## Pitfalls
 
@@ -268,8 +268,9 @@ After writing the report, run this offline check through `terminal`:
 python3 SKILL/scripts/audit_report.py RUN/report.md --ledger RUN/evidence.json --no-live
 ```
 
-Fix structural errors and review every material claim against its supporting
-passages; a clean exit does not certify the report's conclusions.
+Then run `semantic_review.py check RUN` and the completion checkpoint.
+A clean exit records structural checks and a review attestation; it does not
+certify passage authenticity or the report's conclusions.
 
 Maintained at [BrentWilkins/research-skills](https://github.com/BrentWilkins/research-skills).
 Related design references: [SkillMedev's deep-research skill](https://github.com/SkillMedev/skills/blob/main/skills/deep-research/SKILL.md)
