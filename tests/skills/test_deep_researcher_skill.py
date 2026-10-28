@@ -66,7 +66,7 @@ class ResearchTests(unittest.TestCase):
         self.add_source("https://example.com/a")
         self.add_source("https://example.org/b")
         self.claim()
-        data = json.loads(self.path.read_text(encoding="utf-8"))
+        data = json.loads(self.path.read_text(encoding="utf-8-sig"))
         self.assertIsNone(data["sources"][0]["independence_group"])
         errors, warnings = ledger.validate(data)
         self.assertFalse(errors)

@@ -9,7 +9,7 @@ import os
 from pathlib import Path, PurePosixPath
 import tempfile
 import zipfile
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 KIND = "deep-research-run-v1"
 MANIFEST = "run_manifest.json"
@@ -17,7 +17,7 @@ DEFAULTS = {"quick": 4, "standard": 8, "deep": 12}
 
 
 def now():
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 def positive(value):

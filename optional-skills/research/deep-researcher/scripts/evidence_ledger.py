@@ -10,7 +10,7 @@ import json
 import os
 import re
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -66,7 +66,7 @@ def read_ledger(path: Path) -> dict[str, Any]:
 
 def write_ledger(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    data["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    data["updated_at"] = datetime.now(UTC).isoformat(timespec="seconds")
     handle, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     try:
         with os.fdopen(handle, "w", encoding="utf-8") as temp:
@@ -87,7 +87,7 @@ def cmd_init(args: argparse.Namespace) -> None:
         raise SystemExit(
             f"ERROR: ledger already exists: {path} (use --force to replace)"
         )
-    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    now = datetime.now(UTC).isoformat(timespec="seconds")
     data = {
         "version": 1,
         "topic": args.topic,
@@ -99,6 +99,17 @@ def cmd_init(args: argparse.Namespace) -> None:
     }
     write_ledger(path, data)
     print(f"Initialized {path} with {len(args.question)} research question(s).")
+
+
+def resolve_question(data: dict[str, Any], value: str) -> str:
+    """Accept a research question by its full text or its leading ID (``Q1`` for ``Q1: ...``)."""
+    questions = data.get("research_questions", [])
+    if value in questions:
+        return value
+    matches = [q for q in questions if q.split(":", 1)[0].strip() == value.strip()]
+    if len(matches) == 1:
+        return matches[0]
+    raise SystemExit(f"ERROR: unknown research question {value!r}; known: {questions}")
 
 
 def cmd_add_source(args: argparse.Namespace) -> None:
@@ -120,12 +131,12 @@ def cmd_add_source(args: argparse.Namespace) -> None:
         "author": args.author or "",
         "published_date": args.published_date or "",
         "accessed_date": args.accessed_date
-        or datetime.now(timezone.utc).date().isoformat(),
+        or datetime.now(UTC).date().isoformat(),
         "source_type": args.source_type,
         "independence_group": args.independence_group or None,
         "independence_assessed": bool(args.independence_group and args.independence_note),
         "independence_note": args.independence_note or "",
-        "questions": args.question,
+        "questions": [resolve_question(data, q) for q in args.question],
         "extraction_status": args.extraction_status,
         "summary": args.summary or "",
         "excerpts": args.excerpt,
@@ -178,7 +189,7 @@ def cmd_add_claim(args: argparse.Namespace) -> None:
     claim = {
         "id": f"C{claim_number:03d}",
         "text": args.text,
-        "question": args.question,
+        "question": resolve_question(data, args.question),
         "importance": args.importance,
         "status": args.status,
         "source_ids": parse_source_ids(args.source),

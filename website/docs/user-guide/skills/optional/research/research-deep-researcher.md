@@ -21,7 +21,7 @@ Track research claims and resume evidence dossiers.
 | License | MIT |
 | Platforms | linux, macos, windows |
 | Tags | `research`, `web-search`, `web-extraction`, `evidence`, `citations` |
-| Related skills | `grounded-citations`, `research-paper-writing`, `arxiv`, `blogwatcher` |
+| Related skills | [`grounded-citations`](../../bundled/research/research-grounded-citations.md), [`research-paper-writing`](../../optional/research/research-research-paper-writing.md), [`arxiv`](../../bundled/research/research-arxiv.md), [`blogwatcher`](../../optional/research/research-blogwatcher.md) |
 
 ## Reference: full SKILL.md
 
@@ -34,9 +34,11 @@ The following is the complete skill definition that Hermes loads when this skill
 Search discovers candidates; retrieved passages support claims; the ledger controls synthesis.
 Never use search snippets or model memory to fill a missing source-backed conclusion.
 Use native `web_search`, `web_extract`, `browser_navigate`, `read_file`,
-`write_file`, and `patch` tools. Do not type tool calls
-into a terminal or substitute direct search-engine scraping. Scripts below are local
-bookkeeping helpers, not alternative retrieval backends.
+`write_file`, and `patch` tools. When `execute_code` is available, batch discovery
+and extraction by calling the same native tools from code (`from hermes_tools import
+web_search, web_extract`): see [search as code](https://github.com/NousResearch/hermes-agent/blob/main/optional-skills/research/deep-researcher/references/search-as-code.md).
+Never substitute direct search-engine scraping, `curl`, or vendor SDK calls. Scripts
+below are local bookkeeping helpers, not alternative retrieval backends.
 
 ## When to Use
 
@@ -47,7 +49,7 @@ a smaller workflow such as `grounded-citations`.
 
 ## Prerequisites
 
-Python 3.10+ for the standard-library bookkeeping scripts, `terminal` for running
+Python 3.11+ for the standard-library bookkeeping scripts, `terminal` for running
 them, and native retrieval tools configured in Hermes. No extra Python packages,
 API keys, or research-access plugin are required by this skill itself. Retrieval
 services may have their own setup requirements.
@@ -70,8 +72,33 @@ python3 SKILL/scripts/evidence_ledger.py init RUN/evidence.json --topic "Topic" 
 - `evidence_ledger.py check|brief`: validate references and derive a compact brief.
 - `audit_report.py REPORT --ledger LEDGER --no-live`: offline citation audit.
 - `research_run.py archive|restore`: verified lossless archival and recovery.
+- [Search as code](https://github.com/NousResearch/hermes-agent/blob/main/optional-skills/research/deep-researcher/references/search-as-code.md): one `execute_code` round fans out
+  every query, deduplicates canonical URLs, and prints only the shortlist; extraction
+  selects passages in code; a recording round writes the whole batch through the
+  ledger CLI; deep mode researches independent sub-questions in parallel. The
+  recording recipe lists every `add-source`/`add-claim` flag, so `--help` and
+  reading the scripts' source are unnecessary.
 
-All helpers live under `scripts/`; each command supports `--help`.
+All helpers live under `scripts/`. Signatures, so `--help` runs and reading script
+source are unnecessary:
+
+```text
+evidence_ledger.py init LEDGER --topic T --question "Q1: text" [--question "Q2: text" ...]
+evidence_ledger.py add-source LEDGER --url U --title T --source-type primary|secondary|commentary|community
+    --question Q1 [--summary S] [--published-date D] [--evidence '{"excerpt":"...","locator":"..."}' ...]
+    [--independence-group G --independence-note WHY] [--limitation L] [--extraction-status extracted|failed]
+evidence_ledger.py add-claim LEDGER --text T --question Q1 --status supported|disputed|single-source|unsupported
+    [--source 1,2] [--counter-source 3] [--evidence S1E1 ...] [--importance major|minor] [--caveat C] [--reasoning R]
+evidence_ledger.py check|brief LEDGER [--max-chars N]
+research_run.py checkpoint RUN [--status active|complete] [--artifact REL_PATH ...] [--completed X] [--gaps X]
+    [--clear-gaps] [--next-action X]
+audit_report.py REPORT --ledger LEDGER [--no-live]
+```
+
+`--question` takes the full question text or its leading ID (`Q1`). The report audit
+expects inline numeric markers (`[1]`, `[2-3]`) and a final `## References` (or
+`## Citation Links` / `## Bibliography`) section of numbered entries
+`1. [Title](https://url)` whose URLs match ledger sources.
 Read [run management](https://github.com/NousResearch/hermes-agent/blob/main/optional-skills/research/deep-researcher/references/run-management.md) for lifecycle commands.
 
 ## Procedure
@@ -89,9 +116,12 @@ variables. Read [run management](https://github.com/NousResearch/hermes-agent/bl
 or archiving a run.
 
 Planning defaults (override to match the task and record the effective values):
-- Quick: 4 search calls, about 4–6 useful sources.
-- Standard: 8 search calls, about 8–15 useful sources.
-- Deep: 12 search calls, about 15–25 useful sources.
+- Quick: 4 queries one at a time, or 6 in one search-as-code round; about 4–6 useful sources.
+- Standard: 8 queries one at a time, or 16 across at most two rounds; about 8–15 useful sources.
+- Deep: 12 queries one at a time, or 40 across at most three rounds; about 15–25 useful
+  sources. Split independent sub-questions across parallel subagents (see search as code).
+- The larger batched budgets apply only when queries run inside `execute_code`: results
+  are filtered in code, so extra queries add coverage without adding raw snippets to context.
 - Stop after four search/extraction/gap-analysis iterations by default. An explicit zero
   removes the iteration ceiling only; search, context, and storage budgets still apply.
 - Reserve at most two additional searches for a specific high-impact gap after extraction.
@@ -123,7 +153,8 @@ single-source exceptions. Deep mode also requires a counter-evidence search per 
    for interpretation. Popularity and domain suffix are not quality scores.
    Assess directness, author authority, methodological transparency, independence, recency,
    and incentives/conflicts. Do not compare options on dimensions lacking comparable evidence.
-3. Extract at most three promising canonical URLs per batch. Record actual citation identity,
+3. Extract at most three promising canonical URLs per batch (five per `web_extract`
+   call inside a search-as-code round, with passages selected in code). Record actual citation identity,
    retrieval date, relevant passages, coverage, and limitations. Never invent metadata.
 4. A successful HTTP response containing a cookie wall, challenge, or empty body is a
    retrieval failure. For permitted sites, try an available native browser session or an
@@ -142,8 +173,10 @@ single-source exceptions. Deep mode also requires a counter-evidence search per 
    relying on the same study share an origin group even on different domains.
 
 Native retrieval tools own extraction; do not bypass them with terminal
-Firecrawl calls, inline Python, or generated extraction scripts. Invoke the
-bundled bookkeeping scripts through `terminal`.
+Firecrawl calls, raw HTTP fetches, or scraping code. Code that calls
+`hermes_tools.web_search`/`web_extract` inside `execute_code` uses the native tools
+and is the preferred way to batch them. Invoke the bundled bookkeeping scripts
+through `terminal`.
 
 ### 3. Record evidence and checkpoint
 
@@ -154,7 +187,9 @@ python3 SKILL/scripts/evidence_ledger.py init RUN/evidence.json --topic "Topic" 
 ```
 
 After each extraction batch, add concise source records and atomic claims using
-`evidence_ledger.py add-source` and `add-claim`. See `--help` and the
+`evidence_ledger.py add-source` and `add-claim` (with `execute_code`, record the whole
+batch in one call: round 3 of [search as code](https://github.com/NousResearch/hermes-agent/blob/main/optional-skills/research/deep-researcher/references/search-as-code.md)). Never
+edit `evidence.json` by hand to add records; the CLI assigns IDs and validates links. See `--help` and the
 [worked example](https://github.com/NousResearch/hermes-agent/blob/main/optional-skills/research/deep-researcher/references/worked-example.md) for paired passages and locators.
 
 - Use repeatable `--evidence '{"excerpt":"Exact short passage","locator":"Section/page/paragraph"}'`
