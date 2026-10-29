@@ -34,7 +34,7 @@ def _brief(item: dict) -> dict:
     if 'claim_status' in item:
         result['claim_status'] = item['claim_status']
         if any(c.isdigit() for c in item['text']):
-            result['numeric_review'] = 'Record scope_note: period, population/geography, units, denominator and comparison; separate incompatible series.'
+            result['numeric_review'] = 'Check period, population/geography, units, denominator and comparison; separate incompatible series.'
     return result
 
 
@@ -47,7 +47,7 @@ def compact(root: Path, ids: set[str], evidence_ids: set[str], max_chars: int) -
     by_id = {item['id']: item for item in items}
     if ids - by_id.keys() or evidence_ids - expected['evidence'].keys():
         raise ValueError('Unknown item or evidence ID; show RUN lists the current IDs')
-    chosen = [item for item in items if item['id'] in ids or (not ids and item['status'] == 'pending')]
+    chosen = [item for item in items if item['id'] in ids or (not ids and item.get('claim_status') is not None)]
     passages = set(evidence_ids)
     if ids:
         passages.update(key for item in chosen for key in item.get('evidence_ids', []))
@@ -108,42 +108,18 @@ def template(args) -> dict:
         raise ValueError('Decision template exists; edit it or use --replace explicitly')
     result = {key: expected[key] for key in ('report_sha256', 'ledger_sha256')}
     result.update(reviewer=review['reviewer'], checks=copy.deepcopy(review['checks']))
-    keys = {'id', 'status', 'note', 'evidence_ids', 'qualification', 'scope_note'}
-    result['claims'] = [{key: value for key, value in item.items() if key in keys} for item in review['claims']]
     atomic_json(path, result)
     return {'path': str(path), 'automatically_approved': 0,
-            'next': 'Edit explicit decisions and checklist notes with native patch; apply RUN FILE, check RUN, then checkpoint complete.'}
-
-def _updates(staged: dict, payload: dict, label: str) -> None:
-    updates = payload.get(label, [])
-    if not isinstance(updates, list):
-        raise ValueError(f'{label} decisions must be an array')
-    existing = {item['id']: item for item in staged[label]}
-    seen = set()
-    editable = {'id', 'status', 'note', 'evidence_ids', 'qualification', 'scope_note'}
-    for update in updates:
-        if not isinstance(update, dict) or set(update) - editable:
-            raise ValueError('Only explicit decision fields can be updated; never edit source material or hashes')
-        key = update.get('id')
-        if not isinstance(key, str) or key not in existing or key in seen:
-            raise ValueError(f'Unknown or repeated {label} decision ID: {key!r}')
-        if update.get('status') == 'pending' and not any(update.get(k) for k in ('note', 'qualification', 'scope_note')):
-            seen.add(key)
-            continue
-        if update.get('status') not in {'verified', 'qualified'}:
-            raise ValueError(f'{key}: set an explicit verified or qualified decision')
-        seen.add(key)
-        existing[key].update(update)
-
+            'next': 'Write the four critique notes with native patch; apply RUN FILE, check RUN, then checkpoint complete.'}
 
 def apply_decisions(args) -> dict:
     from research_run import safe_path
     from review_validation import inspect_review, review_errors
     expected, current, _ = inspect_review(args.run)
     payload = json.loads(args.payload.read_text(encoding='utf-8'))
-    allowed = {'report_sha256', 'ledger_sha256', 'reviewer', 'checks', 'claims'}
+    allowed = {'report_sha256', 'ledger_sha256', 'reviewer', 'checks'}
     if not isinstance(payload, dict) or set(payload) - allowed:
-        raise ValueError('Decision payload allows only hashes, reviewer, checks and claims. Use template RUN to generate the exact format')
+        raise ValueError('Decision payload allows only hashes, reviewer and checks. Use template RUN to generate the exact format')
     if any(payload.get(key) != expected[key] for key in ('report_sha256', 'ledger_sha256')):
         raise ValueError('Decision hashes are stale or missing; show RUN for current hashes, then review the current material')
     staged = copy.deepcopy(current)
@@ -156,7 +132,6 @@ def apply_decisions(args) -> dict:
         if isinstance(decision, dict) and decision.get('status') == 'pending' and not decision.get('note'):
             continue
         staged['checks'][key] = decision
-    _updates(staged, payload, 'claims')
     errors = review_errors(expected, staged, allow_pending=True)
     if errors:
         raise ValueError('No decisions saved:\n' + '\n'.join(errors))

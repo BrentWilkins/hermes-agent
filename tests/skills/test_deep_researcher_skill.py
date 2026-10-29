@@ -65,9 +65,6 @@ class ResearchTests(unittest.TestCase):
         review["reviewer"] = "Synthetic archive fixture reviewer"
         for check in review["checks"].values():
             check.update(status="checked", note="Reviewed synthetic report and passages.")
-        for claim in review["claims"]:
-            claim.update(status="verified", note="The linked passage states the numeric result.",
-                         scope_note="Synthetic sample, unspecified period, percentage growth; no cross-series comparison.")
         review_path.write_text(json.dumps(review), encoding="utf-8")
         (self.root / "raw.txt").write_text("Synthetic retained text.\n" * 10000, encoding="utf-8")
         self.cli("research_run.py", "checkpoint", self.root, "--status", "complete",

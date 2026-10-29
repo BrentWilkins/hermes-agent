@@ -54,9 +54,6 @@ def approve(root):
     data['reviewer'] = 'Synthetic fixture reviewer'
     for check in data['checks'].values():
         check.update(status='checked', note='Reviewed the synthetic report and retained evidence.')
-    for item in data['claims']:
-        item.update(status='verified', note='The numeric finding is stated in its linked passage.',
-                    scope_note='Observed sample; period not supplied; percentage growth, no cross-series denominator.')
     path.write_text(json.dumps(data), encoding='utf-8')
     return path
 
@@ -143,31 +140,17 @@ def test_completion_requires_current_semantic_review(tmp_path):
     assert 'semantic-review.json' in data['artifacts']
 
 
-@pytest.mark.parametrize('sentence', ['The result is final. [1]', 'The result is attributed to Sindrafed/MCEI. [1]'])
-def test_finality_and_unverified_entity_need_specific_review(tmp_path, sentence):
+def test_material_review_remains_pending_until_explicitly_checked(tmp_path):
     root = init(tmp_path)
     add_batch(root)
-    draft(root, sentence)
-    if 'final' in sentence:
-        ledger_path = root / 'evidence.json'
-        ledger_data = json.loads(ledger_path.read_text())
-        ledger_data['claims'][0]['text'] = 'The result is final.'
-        ledger_path.write_text(json.dumps(ledger_data))
-    cli('semantic_review.py', 'prepare', root, '--replace')
-    path = root / 'semantic-review.json'
-    data = json.loads(path.read_text())
-    data['reviewer'] = 'Synthetic fixture reviewer'
-    assert data['assertions']
-    for check in data['checks'].values():
-        check.update(status='checked', note='Synthetic review.')
-    for item in data['claims']:
-        item.update(status='verified', evidence_ids=['S1E1'], note='Checked the passage.',
-                    scope_note='Observed sample, unspecified period, percentage growth and no cross-series comparison.')
-    if 'Sindrafed' in sentence:
-        data['checks']['entities']['status'] = 'pending'
-    path.write_text(json.dumps(data), encoding='utf-8')
-    # The passage contains neither a finality label nor these organization names.
+    draft(root, 'Finality is unverified; the numeric finding is single-origin. [1]')
+    cli('semantic_review.py', 'prepare', root)
     cli('semantic_review.py', 'check', root, ok=False)
+    path = approve(root)
+    data = json.loads(path.read_text())
+    data['checks']['finality'].update(status='needs-correction', note='Resolve release status before completion.')
+    path.write_text(json.dumps(data))
+    cli('research_run.py', 'checkpoint', root, '--status', 'complete', ok=False)
 
 
 def test_discovery_counts_native_queries_and_retains_all_question_associations(tmp_path, monkeypatch):
@@ -308,34 +291,12 @@ def test_stale_completed_report_cannot_be_archived(tmp_path):
     assert {p.name: p.read_bytes() for p in root.iterdir() if p.is_file()} == before
 
 
-@pytest.mark.parametrize('sentence', ['The result is final. [1]', 'Sindrafed/MCEI reports the result. [1]'])
-def test_review_requires_literal_support_for_finality_or_new_entity(tmp_path, sentence):
+def test_readonly_claims_cannot_be_rewritten_inside_the_review(tmp_path):
     root = init(tmp_path)
-    payload = batch()
-    payload['sources'][0]['evidence'][0]['excerpt'] += ' The result is final, reported by Sindrafed/MCEI.'
-    add_batch(root, payload)
-    draft(root, sentence)
+    add_batch(root)
+    draft(root)
     path = approve(root)
     data = json.loads(path.read_text())
-    path.write_text(json.dumps(data), encoding='utf-8')
-    cli('semantic_review.py', 'check', root)
-
-
-@pytest.mark.parametrize('second_origin,valid', [('operator', False), ('replicator', True)])
-def test_independence_review_uses_assessed_origins_not_domains(tmp_path, second_origin, valid):
-    root = init(tmp_path)
-    payload = batch()
-    first = payload['sources'][0]
-    first.update(independence_group='operator', independence_note='Original dataset producer.')
-    second = json.loads(json.dumps(first))
-    second.update(key='replication', url='https://other.example.org/study',
-                  independence_group=second_origin, independence_note='Traced the underlying dataset origin.')
-    payload['sources'].append(second)
-    payload['claims'][0].update(text='Independent measurements show growth of 10%.',
-                                sources=['dataset', 'replication'], evidence=['dataset:1', 'replication:1'])
-    add_batch(root, payload)
-    draft(root, 'Independent corroboration establishes the finding. [1]')
-    path = approve(root)
-    data = json.loads(path.read_text())
-    path.write_text(json.dumps(data), encoding='utf-8')
-    cli('semantic_review.py', 'check', root, ok=valid)
+    data['claims'][0]['text'] = 'A different claim.'
+    path.write_text(json.dumps(data))
+    cli('semantic_review.py', 'check', root, ok=False)

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from review_signals import assertions
 
-KIND = 'deep-research-semantic-review-v4'
+KIND = 'deep-research-semantic-review-v5'
 CHECKS = ('finality', 'independence', 'entities', 'numbers')
 
 
@@ -33,10 +33,9 @@ def packet(root: Path) -> tuple[dict, dict]:
     if errors:
         raise ValueError('Fix the ledger before semantic review: ' + '; '.join(errors))
     report = report_path.read_text(encoding='utf-8')
-    claims = [{'id': c['id'], 'text': c['text'], 'status': 'pending',
-               'evidence_ids': c.get('evidence_ids', []), 'claim_status': c['status'],
-               'importance': c.get('importance', 'major'), 'caveat': c.get('caveat', ''),
-               'note': '', 'qualification': '', 'scope_note': ''} for c in data['claims']]
+    claims = [{'id': c['id'], 'text': c['text'], 'evidence_ids': c.get('evidence_ids', []),
+               'claim_status': c['status'], 'importance': c.get('importance', 'major'),
+               'caveat': c.get('caveat', ''), 'reasoning': c.get('reasoning', '')} for c in data['claims']]
     return {'kind': KIND, 'report_sha256': digest(report_path), 'ledger_sha256': digest(ledger_path),
             'reviewer': '', 'report': report, 'evidence': evidence_index(data), 'claims': claims,
             'assertions': [{**{k: v for k, v in item.items() if k not in {'status', 'note', 'qualification', 'evidence_ids'}},
@@ -49,7 +48,7 @@ def check(root: Path) -> dict:
     _, review, errors = inspect_review(root)
     if errors:
         raise ValueError('Review is incomplete:\n' + '\n'.join(errors))
-    return {'reviewer': review['reviewer'], 'claims_reviewed': len(review['claims']),
+    return {'reviewer': review['reviewer'], 'claims_in_dossier': len(review['claims']),
             'heuristic_warnings': len(review['assertions']),
             'note': 'Review records are attestations; structural validation cannot establish semantic truth.'}
 

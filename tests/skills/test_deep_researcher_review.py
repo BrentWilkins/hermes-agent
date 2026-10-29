@@ -36,9 +36,6 @@ def ready(packet):
     packet['reviewer'] = 'Fixture reviewer'
     for check in packet['checks'].values():
         check.update(status='checked', note='Compared the synthetic report with retained passages.')
-    for item in packet['claims']:
-        item.update(status='verified', note='Passage reports the stated growth.',
-                    scope_note='Growth in the observed sample; source period unspecified; percentage, no cross-series denominator.')
     return packet
 
 
@@ -66,25 +63,6 @@ def test_dates_and_demonyms_do_not_hide_real_organizations(dossier):
     assert {'MCEI', 'Alpine Research Agency'} <= names
 
 
-@pytest.mark.parametrize('qualification', ['Final EHPA figures', 'Single-origin evidence.'])
-def test_finality_restatement_or_unrelated_caveat_is_rejected(dossier, qualification):
-    packet = ready(prepare(dossier, 'Final EHPA figures show growth. [1]\n\nSingle-origin evidence.'))
-    ledger_path = dossier / 'evidence.json'
-    data = json.loads(ledger_path.read_text())
-    data['claims'][0]['text'] = 'The result is final.'
-    ledger_path.write_text(json.dumps(data))
-    packet = ready(prepare(dossier))
-    packet['claims'][0].update(status='qualified', note='No source states finality.', qualification=qualification)
-    save(dossier, packet)
-    result = cli('check', dossier, ok=False)
-    assert 'finality' in result.stderr.lower() or 'final' in result.stderr.lower()
-
-
-def test_explicit_local_finality_limitation_is_accepted(dossier):
-    packet = ready(prepare(dossier, 'Final status is unverified; the dataset reports growth of 10%. [1]'))
-    save(dossier, packet)
-    cli('check', dossier)
-
 
 def test_compact_view_and_atomic_decision_application(dossier):
     packet = prepare(dossier)
@@ -94,8 +72,6 @@ def test_compact_view_and_atomic_decision_application(dossier):
     assert any(item['id'] == 'C001' for item in view['items'])
     ready(packet)
     payload = {key: packet[key] for key in ['report_sha256', 'ledger_sha256', 'reviewer', 'checks']}
-    payload['claims'] = [{key: item[key] for key in ['id', 'status', 'note', 'evidence_ids', 'scope_note']}
-                         for item in packet['claims']]
     path = dossier / 'decisions.json'
     path.write_text(json.dumps(payload))
     cli('apply', dossier, path)
@@ -104,7 +80,7 @@ def test_compact_view_and_atomic_decision_application(dossier):
     assert (dossier / 'semantic-review.json').read_bytes() == initial
     cli('check', dossier)
     before = (dossier / 'semantic-review.json').read_bytes()
-    payload['claims'].append({'id': 'missing', 'status': 'verified', 'note': 'invalid', 'evidence_ids': ['S1E1']})
+    payload['checks']['invented'] = {'status': 'checked', 'note': 'invalid'}
     path.write_text(json.dumps(payload))
     cli('apply', dossier, path, ok=False)
     assert (dossier / 'semantic-review.json').read_bytes() == before
@@ -113,7 +89,7 @@ def test_compact_view_and_atomic_decision_application(dossier):
 def test_apply_rejects_stale_material_without_reusing_approval(dossier):
     packet = prepare(dossier)
     payload = {key: packet[key] for key in ['report_sha256', 'ledger_sha256']}
-    payload.update(reviewer='Fixture reviewer', claims=[], checks={})
+    payload.update(reviewer='Fixture reviewer', checks={})
     path = dossier / 'decisions.json'
     path.write_text(json.dumps(payload))
     before = (dossier / 'semantic-review.json').read_bytes()
@@ -122,17 +98,16 @@ def test_apply_rejects_stale_material_without_reusing_approval(dossier):
     cli('apply', dossier, path, ok=False)
     assert (dossier / 'semantic-review.json').read_bytes() == before
     fresh = prepare(dossier)
-    assert all(i['status'] == 'pending' for i in fresh['claims'])
+    assert all(i['status'] == 'pending' for i in fresh['checks'].values())
 
 
-def test_check_reports_all_unresolved_items_and_numeric_scope(dossier):
+def test_check_reports_every_unresolved_category(dossier):
     packet = ready(prepare(dossier))
-    packet['claims'][0]['scope_note'] = ''
-    packet['checks']['finality']['status'] = 'pending'
-    packet['checks']['entities']['status'] = 'pending'
+    for key in ['finality', 'entities', 'numbers']:
+        packet['checks'][key]['status'] = 'pending'
     save(dossier, packet)
     result = cli('check', dossier, ok=False)
-    assert all(word in result.stderr for word in ['finality', 'entities', 'C001', 'scope'])
+    assert all(word in result.stderr for word in ['finality', 'entities', 'numbers'])
 
 
 def test_same_entity_on_distinct_lines_keeps_distinct_contexts(dossier):
@@ -174,8 +149,8 @@ def test_template_writes_valid_unapproved_decisions_without_overwriting(dossier)
     path = Path(result['path'])
     draft = json.loads(path.read_text())
     assert draft['report_sha256'] == packet['report_sha256']
-    assert [i['id'] for i in draft['claims']] == [i['id'] for i in packet['claims']]
-    assert all(i['status'] == 'pending' for i in draft['claims'])
+    assert set(draft) == {'report_sha256', 'ledger_sha256', 'reviewer', 'checks'}
+    assert all(i['status'] == 'pending' for i in draft['checks'].values())
     cli('template', dossier, ok=False)
     draft['reviewer'] = 'Fixture reviewer'
     path.write_text(json.dumps(draft))
@@ -211,7 +186,19 @@ def test_heuristic_warnings_do_not_require_word_level_decisions(dossier):
     assert any(i['text'] == 'MCEI' for i in packet['assertions'])
     save(dossier, packet)
     result = json.loads(cli('check', dossier).stdout)
-    assert result['claims_reviewed'] == 1 and result['heuristic_warnings'] >= 1
+    assert result['claims_in_dossier'] == 1 and result['heuristic_warnings'] >= 1
     template_result = json.loads(cli('template', dossier).stdout)
     payload = json.loads(Path(template_result['path']).read_text())
     assert 'assertions' not in payload
+
+
+def test_identified_corrections_are_saved_and_block_completion(dossier):
+    packet = prepare(dossier)
+    payload = {key: packet[key] for key in ['report_sha256', 'ledger_sha256']}
+    payload.update(reviewer='Fixture critic', checks={'numbers': {'status': 'needs-correction', 'note': 'Correct the population comparison.'}})
+    path = dossier / 'critique.json'
+    path.write_text(json.dumps(payload))
+    result = json.loads(cli('apply', dossier, path).stdout)
+    assert result['saved'] and not result['ready']
+    result = cli('check', dossier, ok=False)
+    assert 'Correct the population comparison' in result.stderr

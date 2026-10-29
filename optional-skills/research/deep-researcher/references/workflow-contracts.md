@@ -69,130 +69,86 @@ Independence remains unassessed unless both origin group and explanatory note
 are supplied after tracing the original data. Different domains do not establish
 independence. An honest single-origin limitation is allowed at completion.
 
-## Semantic review without repeated full-packet reads
+## One concise four-part critique
 
-After drafting the report and saving its brief, run through `terminal`:
+Review the completed report against its brief, ledger and retained source text.
+Resolve material errors in facts, scope, names, causal inference and uncertainty.
+Use source footnotes for country/market definitions and check negative claims
+such as "not public" against what was actually retrieved. An unsuccessful search
+supports "not found in this run", not a universal absence claim.
+
+Record one concise critique in four categories. The ledger already records
+claims, passages and provenance: do not duplicate it into claim-approval records.
+Heuristic name/word warnings are read-only prompts, never per-word proof tasks.
 
 ```sh
 python3 SKILL/scripts/semantic_review.py prepare RUN
-python3 SKILL/scripts/semantic_review.py show RUN
-python3 SKILL/scripts/semantic_review.py show RUN --ids C001 --evidence S1E1 --max-chars 12000
+python3 SKILL/scripts/semantic_review.py show RUN --ids C001 --evidence S1E1
+python3 SKILL/scripts/semantic_review.py template RUN
 ```
 
-`prepare` stores the full hash-bound packet on disk and prints a compact pending
-view. `show` returns current hashes, checklist state, pending IDs and short report
-contexts. Selecting item IDs shows their linked passages; `--evidence` selects
-additional passage IDs. Output omissions and excerpt clipping are explicit; the
-stored evidence is unchanged. Increase `--max-chars` or select relevant IDs to
-inspect omitted material. Do not treat clipped passages as complete evidence.
-Read the original retrieved text when needed. Do not repeatedly read the whole
-packet or inspect helper source code to discover how to fill it.
+`prepare` stores a full hash-bound snapshot and prints a compact material-claim
+index. `show` selects relevant claims/passages; omissions and clipping are
+explicit. The complete sources remain on disk. Source claims and warnings are
+immutable inside the review; correct the report or ledger instead.
 
-Review every material ledger claim and the complete report. Heuristic name and
-word flags are read-only warnings for the four-category audit; they are not
-individual tasks and never require a source quote for a label or boilerplate.
-Resolve actual factual issues, not formatting flags. The heuristics are prompts,
-not complete entity recognition or fact checking. Date
-labels are filtered; named organizations and unknown acronyms still need review.
-Repeated same-line names share one warning; distinct lines retain distinct
-contexts. Report headings, code fences and references are not scanned as claims.
-
-Run `semantic_review.py template RUN` to write RUN/review-decisions.json with the
-current hashes, claim IDs, linked passage IDs and current claim decisions. It approves nothing.
-Edit the file with native `patch`; do not invent field names or build update code.
-Blank pending template entries are left pending by `apply`; completion still
-requires a decision for each ledger claim and all four checks. Warnings have no decision fields. Existing templates are never
-replaced without `--replace`; report, ledger and registered artifacts are protected.
-This synthetic example illustrates the format, not an automatic approval:
+`template` writes RUN/review-decisions.json with exact hashes and four pending
+checks. It approves nothing and protects research artifacts from overwrites.
+Edit it with native `patch`; do not invent field names or write custom review
+code. Use `--replace` explicitly to refresh an existing template after edits.
 
 ```json
 {
-  "report_sha256": "HASH_FROM_SHOW",
-  "ledger_sha256": "HASH_FROM_SHOW",
+  "report_sha256": "HASH_FROM_TEMPLATE",
+  "ledger_sha256": "HASH_FROM_TEMPLATE",
   "reviewer": "Actual reviewer or model identity",
   "checks": {
-    "finality": {"status": "checked", "note": "Explain the final/preliminary/unknown assessment."},
-    "independence": {"status": "checked", "note": "Explain traced origins and disclosed limits."},
-    "entities": {"status": "checked", "note": "Explain names and acronym verification."},
-    "numbers": {"status": "checked", "note": "Explain scope, units and numerical comparison checks."}
-  },
-  "claims": [{
-    "id": "C001",
-    "status": "verified",
-    "evidence_ids": ["S1E1"],
-    "note": "Explain exactly how these passages support this claim.",
-    "scope_note": "For numeric claims: period, population/geography, units, denominator and comparison. State unspecified dimensions honestly."
-  }]
+    "finality": {"status": "checked", "note": "Explain source labels and uncertainty in release status."},
+    "independence": {"status": "checked", "note": "Explain underlying origins, shared data and disclosed limits."},
+    "entities": {"status": "checked", "note": "Explain material names/acronyms checked against source identity."},
+    "numbers": {"status": "checked", "note": "Explain periods, populations, geographies, units and denominator checks."}
+  }
 }
 ```
 
 ```sh
 python3 SKILL/scripts/semantic_review.py apply RUN RUN/review-decisions.json
 python3 SKILL/scripts/semantic_review.py check RUN
-```
-
-Decisions may be partial; `apply` validates all supplied changes, saves them
-atomically or saves nothing, and reports remaining work. Repeat for unresolved
-IDs. Never generate blanket approvals or custom Python update loops. Reviewer
-and check decisions remain explicit; neither prepare nor apply approves anything.
-An identical valid retry does not duplicate items. Unknown IDs, altered source
-material, stale hashes and unsupported decisions fail before saving.
-
-`check` reports all unresolved items together with IDs and correction guidance.
-Use `show --ids ID` to inspect the relevant evidence, then correct the report or
-ledger with `patch`. After either artifact changes, run `prepare RUN --replace`
-and review the current packet. All earlier decisions become pending: no silent
-approval reuse across changed source material. Editing only review decisions does
-not require preparing again.
-
-### Correct substantive issues instead of satisfying a checker
-
-Verified claims use their linked passages. Finality labels require explicit
-source support; "new annual release" does not establish "final". If unsupported,
-remove that label, or visibly state `Final status is unverified` in the same
-report paragraph. A qualification must express the actual limitation; repeating
-`Final EHPA figures` or supplying an unrelated single-origin caveat is rejected.
-Use the entity checklist to trace material names, omit unsupported names, or
-label them honestly in the report. A heuristic warning alone does not block
-completion. Independence limitations can be disclosed globally, for example
-`Single-origin evidence; independent corroboration was not established.`
-
-For a qualified decision supply `status: "qualified"`, `note`, `evidence_ids`
-(which may be empty), and `qualification`: the exact explicit limitation in the
-report. Correct the report before preparing a new packet. Qualified does not
-mean permission to leave unqualified certainty elsewhere in the report.
-
-Every numeric claim also requires a `scope_note`. Keep each measured quantity
-bound to its population, period, geography and units. Separate incompatible
-series into distinct claims. Do not attach a 16-country baseline to a 21-country
-growth rate, or describe a European percentage as a national result. Check
-arithmetic and denominator consistency. Where scope is absent, state it as
-unknown rather than inventing it. These notes are reviewer attestations, not an
-automatic numerical or semantic proof.
-
-Verified independence assertions require two explicitly assessed origins. A
-single-origin report may finish with honest, visible limitations. Different
-publishers repeating the same dataset do not supply independent corroboration.
-
-### Completion
-
-```sh
 python3 SKILL/scripts/research_run.py checkpoint RUN --status complete
 ```
 
-Completion requires a nonempty report and brief, a valid nonempty ledger,
-cited-source summaries, precise linked passages for claim sources, valid
-citations, no pending/over-budget searches, and a current complete review.
-Archiving repeats these gates before writing or pruning anything. Review all
-remaining warnings and substantive findings; do not end corrections early.
+A check can be `pending`, `needs-correction`, or `checked`. For an actual issue,
+record `needs-correction` with its explanation. `apply` saves a valid partial
+critique atomically and reports remaining work; identified corrections block
+completion. Correct material findings before declaring the category checked.
 
-A passing checker records an attestation. It cannot prove passage authenticity,
-careful reading, correct scope or factual truth. Legacy ledgers remain readable;
-old review packets need `prepare --replace` under this version before completion.
+If either report or ledger changes, run `prepare RUN --replace`, refresh the
+template explicitly, and record the critique of the new snapshot. Prior notes
+are not silently carried forward. Editing only critique notes does not require
+regenerating the snapshot. Never repeatedly reshape an already-correct report
+merely to silence a heuristic word flag.
+
+Original and secondary copies of one dataset share the same origin-group ID.
+For example, an association release and a news summary of its figures both use
+`association-data`; primary/secondary belongs in `source_type`. A different
+publisher or a label such as `association-derived` does not make an independent
+dataset. Direct national statistics can overlap a regional aggregate; disclose
+that dependence rather than counting them as independent corroboration.
+
+Completion still requires a nonempty report and brief, a valid nonempty ledger,
+cited-source summaries, precise linked passages, valid citations, resolved search
+receipts within budget, and four explicit critique notes for current artifacts.
+Archiving repeats these gates. No timer ends substantive corrections early.
+
+These checks prove structural integrity and record a reviewer attestation. They
+cannot establish factual truth or careful reading. The four-part critique is a
+workflow aid, not certification. Inspect the report independently before relying
+on it. Legacy ledgers remain readable; older review packets need a fresh
+`prepare --replace` under this version before completion.
+
 URL matching is shared with the ledger: document/version query parameters,
 including `ref` and `source`, remain significant; recognized tracking parameters
-are removed. Retrieval always uses the supplied URL. References belong last in
-the report. A bracketed calendar year is prose unless explicitly defined as a
-bibliography number; ordinary citation groups and ranges remain citations.
-Individual `add-claim` writes now validate the staged ledger before saving, just
-as `add-batch` does. Failed additions leave the ledger and assigned IDs unchanged.
+are removed. Retrieval uses the supplied URL. References belong last. Bracketed
+calendar years are prose unless explicitly defined as bibliography numbers.
+Individual `add-claim` writes validate the staged ledger before saving, as
+`add-batch` does; failed writes do not change IDs or evidence.

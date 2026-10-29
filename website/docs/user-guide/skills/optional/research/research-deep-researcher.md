@@ -241,13 +241,14 @@ to focus the four-category audit; they are read-only prompts, not decision recor
 origins, and named organizations/acronyms; review the rest of the report too.
 Use the compact `show RUN` view and `show RUN --ids C001` for relevant passages.
 Run `template RUN` to create unapproved RUN/review-decisions.json with exact IDs
-and fields. Fill it with native `patch`, then use `apply RUN RUN/review-decisions.json`.
-Do not invent a decision schema, rewrite the packet, or generate update loops. Complete the reviewer, four global checks
-(finality, independence, entities, numbers), and ledger-claim decisions using
+and fields. Write four concise critique notes with native `patch`, then use `apply RUN RUN/review-decisions.json`.
+Use the template fields; material claims and heuristic warnings are read-only indexes.
+Record `needs-correction` for an actual problem, fix the report or ledger, then
+prepare a fresh critique. No per-claim or per-word approval records are needed. Complete the reviewer, four global checks
+(finality, independence, entities, numbers), using
 [workflow contracts](https://github.com/NousResearch/hermes-agent/blob/main/optional-skills/research/deep-researcher/references/workflow-contracts.md). Never blanket-approve entries.
-Numeric claims need a scope note covering period,
-population/geography, units, denominator and comparison. Separate incompatible
-series. A real qualification states a limitation beside the affected assertion;
+In the numbers critique, check period, population/geography, units, denominator
+and comparison for every material numeric claim. Separate incompatible series. A real qualification states a limitation beside the affected assertion;
 repeating an unsupported claim is not a qualification.
 
 Run `semantic_review.py check RUN`, then
@@ -261,7 +262,12 @@ Archiving repeats completion checks; keep report.md readable.
 
 ## Pitfalls
 
-- Different hostnames do not establish independent evidence.
+- Different hostnames do not establish independent evidence. Original and
+  secondary copies of one dataset keep the same origin group; source type
+  records whether a publication is primary or secondary.
+- Inspect source footnotes before claiming coverage details are unavailable.
+  Say what was not retrieved in this run; do not turn missing evidence into
+  claims that a dataset does not exist or information is not public.
 - Ledger checks validate structure, not truth or verbatim passage accuracy;
   compare recorded excerpts with retrieved text during the semantic audit.
 - Archives are not encrypted backups. Never include credentials or browser state.
