@@ -7,12 +7,12 @@ import re
 
 from review_signals import SIGNALS, normalized
 
-LIMITATION = re.compile(r'\b(unverified|unknown|uncertain|limited|unsupported|unresolved|not established|not confirmed|not verified|not final|no independent|single[- ](?:source|origin))\b', re.IGNORECASE)
-FINAL_LIMIT = re.compile(r'\b(final(?:ity| status)?|definitive)\b.{0,65}\b(unverified|unknown|uncertain|not established|not confirmed|not verified)\b|\bnot\b.{0,35}\b(final|definitive)\b', re.IGNORECASE)
-INDEPENDENCE_LIMIT = re.compile(r'single[- ](?:origin|source)|no independent|not independently|independen\w*.{0,40}(?:unverified|unknown|not established|not confirmed)', re.IGNORECASE)
+LIMITATION = re.compile(r'\b(unverified|unknown|uncertain|limited|unsupported|unresolved|not established|not confirmed|not verified|not final|no independent|single(?:[- ]assessed)?[- ](?:source|origin))\b', re.IGNORECASE)
+FINAL_LIMIT = re.compile(r'\b(final(?:ity| status)?|definitive)\b.{0,65}\b(unverified|unknown|uncertain|not established|not confirmed|not verified)\b|\bnot\b.{0,35}\b(final|definitive)\b|\b(unverified|unknown|uncertain)\b.{0,40}\bfinal(?:ity| status)?\b', re.IGNORECASE)
+INDEPENDENCE_LIMIT = re.compile(r'single(?:[- ]assessed)?[- ](?:origin|source)|no independent|not independently|independen\w*.{0,40}(?:unverified|unknown|not established|not confirmed)', re.IGNORECASE)
 
 
-def _qualification(item: dict, qualification: str, report: str) -> None:
+def _qualification(item: dict, qualification: str) -> None:
     kind = item.get('kind')
     if not LIMITATION.search(qualification):
         raise ValueError('Qualification must explicitly disclose a limitation, not repeat the assertion')
@@ -20,12 +20,6 @@ def _qualification(item: dict, qualification: str, report: str) -> None:
         raise ValueError('Finality needs an explicit unverified/unknown final-status limitation; otherwise revise the report')
     if kind == 'independence' and not INDEPENDENCE_LIMIT.search(qualification):
         raise ValueError('Independence needs an explicit single-origin or unverified-independence limitation')
-    if kind == 'entity' and normalized(item['text']) not in normalized(qualification):
-        raise ValueError('Entity qualification must name the unverified entity')
-    if kind in {'entity', 'finality'}:
-        paragraphs = report.split('\n\n')
-        if not any(normalized(item['context']) in normalized(p) and normalized(qualification) in normalized(p) for p in paragraphs):
-            raise ValueError('Place this explicit limitation in the same report paragraph as the assertion')
 
 
 def _decisions(expected: list[dict], actual, label: str) -> list[tuple[dict, dict]]:
@@ -59,18 +53,16 @@ def _decision(item: dict, report: str, evidence: dict) -> list[str]:
     elif not ids:
         raise ValueError('Verified findings require precise supporting evidence IDs')
     if item['status'] == 'qualified':
-        _qualification(item, qualification, report)
+        _qualification(item, qualification)
     return ids
 
 
-def _assertion_support(item: dict, ids: list[str], evidence: dict) -> None:
+def _claim_support(item: dict, ids: list[str], evidence: dict) -> None:
     if item['status'] != 'verified':
         return
     passages = ' '.join(evidence[key]['excerpt'] for key in ids)
     if item['kind'] == 'finality' and not re.search(r'\b' + re.escape(item['text']) + r'\b', passages, re.IGNORECASE):
         raise ValueError('A finality label needs a retained passage that explicitly states that label')
-    if item['kind'] == 'entity' and normalized(item['text']) not in normalized(passages):
-        raise ValueError('An entity needs a retained passage naming it, or an explicit unverified qualification')
     if item['kind'] == 'independence':
         groups = {evidence[key].get('independence_group') for key in ids
                   if evidence[key].get('independence_assessed') and evidence[key].get('independence_note', '').strip()}
@@ -82,30 +74,30 @@ def _assertion_support(item: dict, ids: list[str], evidence: dict) -> None:
 def _identity(expected: dict, review) -> None:
     if not isinstance(review, dict):
         raise ValueError('Semantic review must be a JSON object')
-    for key in ('kind', 'report_sha256', 'ledger_sha256', 'report', 'evidence'):
+    for key in ('kind', 'report_sha256', 'ledger_sha256', 'report', 'evidence', 'assertions'):
         if review.get(key) != expected[key]:
             raise ValueError('Semantic review is stale or source material changed; prepare RUN --replace, then review again')
 
 
-def item_errors(original: dict, decision: dict, expected: dict, label: str) -> list[str]:
+def item_errors(original: dict, decision: dict, expected: dict) -> list[str]:
     try:
         ids = _decision(decision, expected['report'], expected['evidence'])
-        if label == 'claim':
-            if set(ids) - set(original.get('evidence_ids', [])):
-                raise ValueError('Use evidence linked to this claim')
-            if re.search(r'\d', original['text']):
-                scope = decision.get('scope_note')
-                if not isinstance(scope, str) or len(scope.strip()) < 20:
-                    raise ValueError('Numeric scope_note must explain period, population/geography, units and any denominator/comparison')
+        if set(ids) - set(original.get('evidence_ids', [])):
+            raise ValueError('Use evidence linked to this claim')
+        if re.search(r'\d', original['text']):
+            scope = decision.get('scope_note')
+            if not isinstance(scope, str) or len(scope.strip()) < 20:
+                raise ValueError('Numeric scope_note must explain period, population/geography, units and any denominator/comparison')
+        for kind, pattern in SIGNALS.items():
+            match = pattern.search(original['text'])
+            if not match:
+                continue
             if decision['status'] == 'verified':
-                for kind, pattern in SIGNALS.items():
-                    match = pattern.search(original['text'])
-                    if match:
-                        _assertion_support({**decision, 'kind': kind, 'text': match.group()}, ids, expected['evidence'])
-        else:
-            _assertion_support(decision, ids, expected['evidence'])
+                _claim_support({**decision, 'kind': kind, 'text': match.group()}, ids, expected['evidence'])
+            else:
+                _qualification({**decision, 'kind': kind}, decision['qualification'])
     except ValueError as exc:
-        return [f"{original['id']} ({original.get('kind', label)}: {original['text'][:80]}): {exc}"]
+        return [f"{original['id']} (claim: {original['text'][:80]}): {exc}"]
     return []
 
 
@@ -124,16 +116,15 @@ def review_errors(expected: dict, review: dict, allow_pending: bool = False) -> 
                 continue
             if not isinstance(value, dict) or value.get('status') != 'checked' or not isinstance(value.get('note'), str) or not value['note'].strip():
                 errors.append(f'{key}: checked status and a specific review note are required')
-    for label in ('claim', 'assertion'):
-        try:
-            pairs = _decisions(expected[label + 's'], review.get(label + 's'), label)
-        except ValueError as exc:
-            errors.append(f'{label}s: {exc}')
+    try:
+        pairs = _decisions(expected['claims'], review.get('claims'), 'claim')
+    except ValueError as exc:
+        errors.append(f'claims: {exc}')
+        return errors
+    for original, decision in pairs:
+        if allow_pending and decision.get('status') == 'pending':
             continue
-        for original, decision in pairs:
-            if allow_pending and decision.get('status') == 'pending':
-                continue
-            errors.extend(item_errors(original, decision, expected, label))
+        errors.extend(item_errors(original, decision, expected))
     return errors
 
 

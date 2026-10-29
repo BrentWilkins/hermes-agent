@@ -88,17 +88,20 @@ inspect omitted material. Do not treat clipped passages as complete evidence.
 Read the original retrieved text when needed. Do not repeatedly read the whole
 packet or inspect helper source code to discover how to fill it.
 
-Review every ledger claim and flagged assertion, plus the complete report. The
-heuristics are prompts, not complete entity recognition or fact checking. Date
+Review every material ledger claim and the complete report. Heuristic name and
+word flags are read-only warnings for the four-category audit; they are not
+individual tasks and never require a source quote for a label or boilerplate.
+Resolve actual factual issues, not formatting flags. The heuristics are prompts,
+not complete entity recognition or fact checking. Date
 labels are filtered; named organizations and unknown acronyms still need review.
-Repeated same-line names share one review item; distinct lines retain distinct
+Repeated same-line names share one warning; distinct lines retain distinct
 contexts. Report headings, code fences and references are not scanned as claims.
 
 Run `semantic_review.py template RUN` to write RUN/review-decisions.json with the
-current hashes, IDs, linked passage IDs and empty decisions. It approves nothing.
+current hashes, claim IDs, linked passage IDs and current claim decisions. It approves nothing.
 Edit the file with native `patch`; do not invent field names or build update code.
 Blank pending template entries are left pending by `apply`; completion still
-requires every decision and all four checks. Existing templates are never
+requires a decision for each ledger claim and all four checks. Warnings have no decision fields. Existing templates are never
 replaced without `--replace`; report, ledger and registered artifacts are protected.
 This synthetic example illustrates the format, not an automatic approval:
 
@@ -119,8 +122,7 @@ This synthetic example illustrates the format, not an automatic approval:
     "evidence_ids": ["S1E1"],
     "note": "Explain exactly how these passages support this claim.",
     "scope_note": "For numeric claims: period, population/geography, units, denominator and comparison. State unspecified dimensions honestly."
-  }],
-  "assertions": []
+  }]
 }
 ```
 
@@ -150,8 +152,9 @@ source support; "new annual release" does not establish "final". If unsupported,
 remove that label, or visibly state `Final status is unverified` in the same
 report paragraph. A qualification must express the actual limitation; repeating
 `Final EHPA figures` or supplying an unrelated single-origin caveat is rejected.
-Entity qualifications must name the unverified entity and appear beside its
-assertion. Independence limitations can be disclosed globally, for example
+Use the entity checklist to trace material names, omit unsupported names, or
+label them honestly in the report. A heuristic warning alone does not block
+completion. Independence limitations can be disclosed globally, for example
 `Single-origin evidence; independent corroboration was not established.`
 
 For a qualified decision supply `status: "qualified"`, `note`, `evidence_ids`

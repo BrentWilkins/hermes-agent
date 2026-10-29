@@ -68,9 +68,6 @@ class ResearchTests(unittest.TestCase):
         for claim in review["claims"]:
             claim.update(status="verified", note="The linked passage states the numeric result.",
                          scope_note="Synthetic sample, unspecified period, percentage growth; no cross-series comparison.")
-        for assertion in review["assertions"]:
-            assertion.update(status="qualified", qualification="Single-origin evidence.",
-                             note="Independent corroboration is not asserted.")
         review_path.write_text(json.dumps(review), encoding="utf-8")
         (self.root / "raw.txt").write_text("Synthetic retained text.\n" * 10000, encoding="utf-8")
         self.cli("research_run.py", "checkpoint", self.root, "--status", "complete",

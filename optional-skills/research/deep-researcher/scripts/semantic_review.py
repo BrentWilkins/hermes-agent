@@ -8,7 +8,7 @@ from pathlib import Path
 
 from review_signals import assertions
 
-KIND = 'deep-research-semantic-review-v3'
+KIND = 'deep-research-semantic-review-v4'
 CHECKS = ('finality', 'independence', 'entities', 'numbers')
 
 
@@ -39,7 +39,8 @@ def packet(root: Path) -> tuple[dict, dict]:
                'note': '', 'qualification': '', 'scope_note': ''} for c in data['claims']]
     return {'kind': KIND, 'report_sha256': digest(report_path), 'ledger_sha256': digest(ledger_path),
             'reviewer': '', 'report': report, 'evidence': evidence_index(data), 'claims': claims,
-            'assertions': assertions(report, data),
+            'assertions': [{**{k: v for k, v in item.items() if k not in {'status', 'note', 'qualification', 'evidence_ids'}},
+                            'status': 'warning'} for item in assertions(report, data)],
             'checks': {key: {'status': 'pending', 'note': ''} for key in CHECKS}}, data
 
 
@@ -49,7 +50,7 @@ def check(root: Path) -> dict:
     if errors:
         raise ValueError('Review is incomplete:\n' + '\n'.join(errors))
     return {'reviewer': review['reviewer'], 'claims_reviewed': len(review['claims']),
-            'assertions_reviewed': len(review['assertions']),
+            'heuristic_warnings': len(review['assertions']),
             'note': 'Review records are attestations; structural validation cannot establish semantic truth.'}
 
 

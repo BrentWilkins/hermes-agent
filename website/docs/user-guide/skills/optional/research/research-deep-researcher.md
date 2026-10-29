@@ -236,14 +236,14 @@ Fix structural errors, explain unresolved warnings, and remember that a blocked 
 does not invalidate a source already retrieved. Revise once for accuracy and once for usefulness.
 
 Check the executive summary against the findings, then run
-`semantic_review.py prepare RUN`. Review every claim and flagged assertion against
-the retained passages. Explicitly check final/preliminary/unknown status, independent
+`semantic_review.py prepare RUN`. Review material claims against the retained passages. Use heuristic warnings
+to focus the four-category audit; they are read-only prompts, not decision records. Explicitly check final/preliminary/unknown status, independent
 origins, and named organizations/acronyms; review the rest of the report too.
 Use the compact `show RUN` view and `show RUN --ids C001` for relevant passages.
 Run `template RUN` to create unapproved RUN/review-decisions.json with exact IDs
 and fields. Fill it with native `patch`, then use `apply RUN RUN/review-decisions.json`.
 Do not invent a decision schema, rewrite the packet, or generate update loops. Complete the reviewer, four global checks
-(finality, independence, entities, numbers), and per-entry decisions using
+(finality, independence, entities, numbers), and ledger-claim decisions using
 [workflow contracts](https://github.com/NousResearch/hermes-agent/blob/main/optional-skills/research/deep-researcher/references/workflow-contracts.md). Never blanket-approve entries.
 Numeric claims need a scope note covering period,
 population/geography, units, denominator and comparison. Separate incompatible

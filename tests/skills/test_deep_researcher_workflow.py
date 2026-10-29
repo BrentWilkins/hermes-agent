@@ -57,8 +57,6 @@ def approve(root):
     for item in data['claims']:
         item.update(status='verified', note='The numeric finding is stated in its linked passage.',
                     scope_note='Observed sample; period not supplied; percentage growth, no cross-series denominator.')
-    for item in data['assertions']:
-        item.update(status='qualified', qualification='Single-origin evidence.', note='No independent corroboration asserted.')
     path.write_text(json.dumps(data), encoding='utf-8')
     return path
 
@@ -150,6 +148,11 @@ def test_finality_and_unverified_entity_need_specific_review(tmp_path, sentence)
     root = init(tmp_path)
     add_batch(root)
     draft(root, sentence)
+    if 'final' in sentence:
+        ledger_path = root / 'evidence.json'
+        ledger_data = json.loads(ledger_path.read_text())
+        ledger_data['claims'][0]['text'] = 'The result is final.'
+        ledger_path.write_text(json.dumps(ledger_data))
     cli('semantic_review.py', 'prepare', root, '--replace')
     path = root / 'semantic-review.json'
     data = json.loads(path.read_text())
@@ -157,8 +160,11 @@ def test_finality_and_unverified_entity_need_specific_review(tmp_path, sentence)
     assert data['assertions']
     for check in data['checks'].values():
         check.update(status='checked', note='Synthetic review.')
-    for item in data['claims'] + data['assertions']:
-        item.update(status='verified', evidence_ids=['S1E1'], note='Checked the passage.')
+    for item in data['claims']:
+        item.update(status='verified', evidence_ids=['S1E1'], note='Checked the passage.',
+                    scope_note='Observed sample, unspecified period, percentage growth and no cross-series comparison.')
+    if 'Sindrafed' in sentence:
+        data['checks']['entities']['status'] = 'pending'
     path.write_text(json.dumps(data), encoding='utf-8')
     # The passage contains neither a finality label nor these organization names.
     cli('semantic_review.py', 'check', root, ok=False)
@@ -246,7 +252,7 @@ def test_no_match_and_overlapping_windows_preserve_literal_text(tmp_path):
 def test_review_cannot_drop_assertions_or_edit_retained_evidence(tmp_path):
     root = init(tmp_path)
     add_batch(root)
-    draft(root, 'The result is final. [1]')
+    draft(root, 'The final status is unverified. [1]')
     approve(root)
     path = root / 'semantic-review.json'
     original = json.loads(path.read_text())
@@ -311,8 +317,6 @@ def test_review_requires_literal_support_for_finality_or_new_entity(tmp_path, se
     draft(root, sentence)
     path = approve(root)
     data = json.loads(path.read_text())
-    for assertion in data['assertions']:
-        assertion.update(status='verified', evidence_ids=['S1E1'], note='The source passage states the label or entity.')
     path.write_text(json.dumps(data), encoding='utf-8')
     cli('semantic_review.py', 'check', root)
 
@@ -327,13 +331,11 @@ def test_independence_review_uses_assessed_origins_not_domains(tmp_path, second_
     second.update(key='replication', url='https://other.example.org/study',
                   independence_group=second_origin, independence_note='Traced the underlying dataset origin.')
     payload['sources'].append(second)
+    payload['claims'][0].update(text='Independent measurements show growth of 10%.',
+                                sources=['dataset', 'replication'], evidence=['dataset:1', 'replication:1'])
     add_batch(root, payload)
     draft(root, 'Independent corroboration establishes the finding. [1]')
     path = approve(root)
     data = json.loads(path.read_text())
-    for item in data['assertions']:
-        if item['kind'] == 'independence':
-            item.update(status='verified', evidence_ids=['S1E1', 'S2E1'],
-                        note='Compared the explicitly assessed origin groups.')
     path.write_text(json.dumps(data), encoding='utf-8')
     cli('semantic_review.py', 'check', root, ok=valid)

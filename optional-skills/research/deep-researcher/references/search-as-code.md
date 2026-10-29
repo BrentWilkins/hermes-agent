@@ -106,7 +106,7 @@ available for small manual additions.
 ## 5. Review and finish
 
 Derive the brief, draft from linked evidence, and prepare a semantic review packet.
-Read the actual passages, resolve every claim/assertion and all four global checks,
+Read the actual passages, resolve material claims and all four global checks,
 then validate the review before marking complete. Never generate blanket approvals
 merely to satisfy the checker. See [workflow contracts](workflow-contracts.md).
 

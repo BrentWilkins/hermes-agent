@@ -55,9 +55,6 @@ def test_repeated_same_line_entity_has_one_stable_review_id(dossier):
     again = prepare(dossier)
     assert [i['id'] for i in again['assertions']] == ids
     ready(packet)
-    for item in packet['assertions']:
-        item.update(status='qualified', note='Name was not established from retained passages.',
-                    qualification='Cyprus is unverified')
     save(dossier, packet)
     cli('check', dossier)
 
@@ -72,8 +69,12 @@ def test_dates_and_demonyms_do_not_hide_real_organizations(dossier):
 @pytest.mark.parametrize('qualification', ['Final EHPA figures', 'Single-origin evidence.'])
 def test_finality_restatement_or_unrelated_caveat_is_rejected(dossier, qualification):
     packet = ready(prepare(dossier, 'Final EHPA figures show growth. [1]\n\nSingle-origin evidence.'))
-    for item in packet['assertions']:
-        item.update(status='qualified', note='No source states finality.', qualification=qualification)
+    ledger_path = dossier / 'evidence.json'
+    data = json.loads(ledger_path.read_text())
+    data['claims'][0]['text'] = 'The result is final.'
+    ledger_path.write_text(json.dumps(data))
+    packet = ready(prepare(dossier))
+    packet['claims'][0].update(status='qualified', note='No source states finality.', qualification=qualification)
     save(dossier, packet)
     result = cli('check', dossier, ok=False)
     assert 'finality' in result.stderr.lower() or 'final' in result.stderr.lower()
@@ -81,9 +82,6 @@ def test_finality_restatement_or_unrelated_caveat_is_rejected(dossier, qualifica
 
 def test_explicit_local_finality_limitation_is_accepted(dossier):
     packet = ready(prepare(dossier, 'Final status is unverified; the dataset reports growth of 10%. [1]'))
-    for item in packet['assertions']:
-        item.update(status='qualified', note='The source does not establish final status.',
-                    qualification='Final status is unverified')
     save(dossier, packet)
     cli('check', dossier)
 
@@ -98,7 +96,6 @@ def test_compact_view_and_atomic_decision_application(dossier):
     payload = {key: packet[key] for key in ['report_sha256', 'ledger_sha256', 'reviewer', 'checks']}
     payload['claims'] = [{key: item[key] for key in ['id', 'status', 'note', 'evidence_ids', 'scope_note']}
                          for item in packet['claims']]
-    payload['assertions'] = []
     path = dossier / 'decisions.json'
     path.write_text(json.dumps(payload))
     cli('apply', dossier, path)
@@ -116,7 +113,7 @@ def test_compact_view_and_atomic_decision_application(dossier):
 def test_apply_rejects_stale_material_without_reusing_approval(dossier):
     packet = prepare(dossier)
     payload = {key: packet[key] for key in ['report_sha256', 'ledger_sha256']}
-    payload.update(reviewer='Fixture reviewer', claims=[], assertions=[], checks={})
+    payload.update(reviewer='Fixture reviewer', claims=[], checks={})
     path = dossier / 'decisions.json'
     path.write_text(json.dumps(payload))
     before = (dossier / 'semantic-review.json').read_bytes()
@@ -178,7 +175,7 @@ def test_template_writes_valid_unapproved_decisions_without_overwriting(dossier)
     draft = json.loads(path.read_text())
     assert draft['report_sha256'] == packet['report_sha256']
     assert [i['id'] for i in draft['claims']] == [i['id'] for i in packet['claims']]
-    assert all(i['status'] == 'pending' for i in draft['claims'] + draft['assertions'])
+    assert all(i['status'] == 'pending' for i in draft['claims'])
     cli('template', dossier, ok=False)
     draft['reviewer'] = 'Fixture reviewer'
     path.write_text(json.dumps(draft))
@@ -207,3 +204,14 @@ def test_entity_review_ignores_report_labels_but_keeps_substantive_names(dossier
     names = {i['text'] for i in packet['assertions'] if i['kind'] == 'entity'}
     assert not names.intersection({'Mode', 'Sources', 'Scope', 'Its March', 'Medium', 'High', 'Affordability', 'Installer', 'Hermes Deep Researcher'})
     assert {'MCEI', 'Alpine Research Agency'} <= names
+
+
+def test_heuristic_warnings_do_not_require_word_level_decisions(dossier):
+    packet = ready(prepare(dossier, 'MCEI identity is unverified. The dataset reports growth of 10%. [1]'))
+    assert any(i['text'] == 'MCEI' for i in packet['assertions'])
+    save(dossier, packet)
+    result = json.loads(cli('check', dossier).stdout)
+    assert result['claims_reviewed'] == 1 and result['heuristic_warnings'] >= 1
+    template_result = json.loads(cli('template', dossier).stdout)
+    payload = json.loads(Path(template_result['path']).read_text())
+    assert 'assertions' not in payload

@@ -50,10 +50,11 @@ def compact(root: Path, ids: set[str], evidence_ids: set[str], max_chars: int) -
     chosen = [item for item in items if item['id'] in ids or (not ids and item['status'] == 'pending')]
     passages = set(evidence_ids)
     if ids:
-        passages.update(key for item in chosen for key in item['evidence_ids'])
+        passages.update(key for item in chosen for key in item.get('evidence_ids', []))
     result = {'report_sha256': expected['report_sha256'], 'ledger_sha256': expected['ledger_sha256'],
               'checks': review['checks'], 'items': [_brief(item) for item in chosen],
-              'passages': [], 'errors': errors, 'omitted': {'items': [], 'passages': [], 'errors': 0},
+              'passages': [], 'warnings': [{k: item[k] for k in ('id', 'kind', 'text', 'line')} for item in review['assertions']],
+              'errors': errors, 'omitted': {'items': [], 'passages': [], 'warnings': [], 'errors': 0},
               'next': 'Run template RUN; edit its unapproved review-decisions.json; apply RUN RUN/review-decisions.json. Correct report/ledger with native patch, then prepare RUN --replace. Never approve automatically.'}
     for key in sorted(passages):
         evidence = expected['evidence'][key]
@@ -68,6 +69,8 @@ def _fit(result: dict, max_chars: int) -> dict:
         if result['errors']:
             result['errors'].pop()
             result['omitted']['errors'] += 1
+        elif result['warnings']:
+            result['omitted']['warnings'].insert(0, result['warnings'].pop()['id'])
         elif result['items']:
             result['omitted']['items'].insert(0, result['items'].pop()['id'])
         elif result['passages']:
@@ -105,9 +108,8 @@ def template(args) -> dict:
         raise ValueError('Decision template exists; edit it or use --replace explicitly')
     result = {key: expected[key] for key in ('report_sha256', 'ledger_sha256')}
     result.update(reviewer=review['reviewer'], checks=copy.deepcopy(review['checks']))
-    for label in ('claims', 'assertions'):
-        keys = {'id', 'status', 'note', 'evidence_ids', 'qualification', 'scope_note'}
-        result[label] = [{key: value for key, value in item.items() if key in keys} for item in review[label]]
+    keys = {'id', 'status', 'note', 'evidence_ids', 'qualification', 'scope_note'}
+    result['claims'] = [{key: value for key, value in item.items() if key in keys} for item in review['claims']]
     atomic_json(path, result)
     return {'path': str(path), 'automatically_approved': 0,
             'next': 'Edit explicit decisions and checklist notes with native patch; apply RUN FILE, check RUN, then checkpoint complete.'}
@@ -139,9 +141,9 @@ def apply_decisions(args) -> dict:
     from review_validation import inspect_review, review_errors
     expected, current, _ = inspect_review(args.run)
     payload = json.loads(args.payload.read_text(encoding='utf-8'))
-    allowed = {'report_sha256', 'ledger_sha256', 'reviewer', 'checks', 'claims', 'assertions'}
+    allowed = {'report_sha256', 'ledger_sha256', 'reviewer', 'checks', 'claims'}
     if not isinstance(payload, dict) or set(payload) - allowed:
-        raise ValueError('Decision payload allows only hashes, reviewer, checks, claims and assertions. Use template RUN to generate the exact format')
+        raise ValueError('Decision payload allows only hashes, reviewer, checks and claims. Use template RUN to generate the exact format')
     if any(payload.get(key) != expected[key] for key in ('report_sha256', 'ledger_sha256')):
         raise ValueError('Decision hashes are stale or missing; show RUN for current hashes, then review the current material')
     staged = copy.deepcopy(current)
@@ -154,8 +156,7 @@ def apply_decisions(args) -> dict:
         if isinstance(decision, dict) and decision.get('status') == 'pending' and not decision.get('note'):
             continue
         staged['checks'][key] = decision
-    for label in ('claims', 'assertions'):
-        _updates(staged, payload, label)
+    _updates(staged, payload, 'claims')
     errors = review_errors(expected, staged, allow_pending=True)
     if errors:
         raise ValueError('No decisions saved:\n' + '\n'.join(errors))
