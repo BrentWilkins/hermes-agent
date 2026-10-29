@@ -66,7 +66,8 @@ class ResearchTests(unittest.TestCase):
         for check in review["checks"].values():
             check.update(status="checked", note="Reviewed synthetic report and passages.")
         for claim in review["claims"]:
-            claim.update(status="verified", note="The linked passage states the numeric result.")
+            claim.update(status="verified", note="The linked passage states the numeric result.",
+                         scope_note="Synthetic sample, unspecified period, percentage growth; no cross-series comparison.")
         for assertion in review["assertions"]:
             assertion.update(status="qualified", qualification="Single-origin evidence.",
                              note="Independent corroboration is not asserted.")

@@ -58,7 +58,7 @@ python3 SKILL/scripts/evidence_ledger.py init RUN/evidence.json --topic "Topic" 
 - `evidence_ledger.py add-source|add-claim`: individual additions remain available.
 - `evidence_ledger.py check|brief LEDGER`: validate and derive a compact brief.
 - `passages.py CACHE --term TEXT --max-chars 4000`: bounded literal character windows.
-- `semantic_review.py prepare|check RUN`: review claims and flagged assertions.
+- `semantic_review.py prepare|show|apply|check RUN`: compact, atomic evidence review.
 - `audit_report.py REPORT --ledger LEDGER --no-live`: offline citation audit.
 - `research_run.py archive|restore`: verified lossless archival and recovery.
 - [Search as code](references/search-as-code.md): tested native-tool discovery,
@@ -222,8 +222,15 @@ Check the executive summary against the findings, then run
 `semantic_review.py prepare RUN`. Review every claim and flagged assertion against
 the retained passages. Explicitly check final/preliminary/unknown status, independent
 origins, and named organizations/acronyms; review the rest of the report too.
-Complete the packet's reviewer, three global checks, and per-entry decisions using
+Use the compact `show RUN` view and `show RUN --ids C001` for relevant passages.
+Save explicit decisions with `apply RUN RUN/decisions.json`; do not rewrite the
+packet or generate update loops. Complete the reviewer, four global checks
+(finality, independence, entities, numbers), and per-entry decisions using
 [workflow contracts](references/workflow-contracts.md). Never blanket-approve entries.
+Numeric claims need a scope note covering period,
+population/geography, units, denominator and comparison. Separate incompatible
+series. A real qualification states a limitation beside the affected assertion;
+repeating an unsupported claim is not a qualification.
 
 Run `semantic_review.py check RUN`, then
 `research_run.py checkpoint RUN --status complete`. Completion requires the report,

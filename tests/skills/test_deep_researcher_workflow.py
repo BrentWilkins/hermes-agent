@@ -55,7 +55,8 @@ def approve(root):
     for check in data['checks'].values():
         check.update(status='checked', note='Reviewed the synthetic report and retained evidence.')
     for item in data['claims']:
-        item.update(status='verified', note='The numeric finding is stated in its linked passage.')
+        item.update(status='verified', note='The numeric finding is stated in its linked passage.',
+                    scope_note='Observed sample; period not supplied; percentage growth, no cross-series denominator.')
     for item in data['assertions']:
         item.update(status='qualified', qualification='Single-origin evidence.', note='No independent corroboration asserted.')
     path.write_text(json.dumps(data), encoding='utf-8')
