@@ -14,6 +14,8 @@ def select(text: str, terms: list[str], max_chars: int = 4000, context: int = 20
         raise ValueError('max_chars/max_passages must be positive and context nonnegative')
     if not terms or any(not isinstance(term, str) or not term.strip() for term in terms):
         raise ValueError('Supply at least one nonempty search term')
+    if '[... middle omitted — see footer ...]' in text and '[TRUNCATED]' in text:
+        raise ValueError('This is a truncated native display. Use the Full text saved to path from its footer, not a cut copy, for passage selection.')
     # Regex offsets refer to the original Unicode text, unlike indexes into casefolded text.
     pattern = re.compile('|'.join(re.escape(term) for term in sorted(set(terms), key=len, reverse=True)), re.IGNORECASE)
     starts = [0, *[match.end() for match in re.finditer('\n', text)]]
@@ -40,9 +42,12 @@ def select(text: str, terms: list[str], max_chars: int = 4000, context: int = 20
                          'clipped_before': lo > 0, 'clipped_after': hi < len(text)})
         remaining -= hi - lo
         previous_end = hi
+    stored_truncated = '[... stored copy truncated at ' in text
     return {'status': 'matched' if matches else 'no-match', 'matches': matches,
+            'input_truncated': stored_truncated,
             'omitted_matches': omitted, 'passages': passages,
-            'note': 'No match means absent from this extracted text, not proof that the original page lacks it.'}
+            'note': ('Native stored copy is capped; omitted text remains unreviewed. ' if stored_truncated else '') +
+                    'No match means absent from this extracted text, not proof that the original page lacks it.'}
 
 
 def main() -> None:

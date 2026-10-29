@@ -55,7 +55,7 @@ def require_completion(root: Path, manifest: dict) -> dict:
     entries, parse_errors = bibliography_entries(lines)
     by_url = {canonical_url(source['url']): source['id'] for source in data['sources']}
     cited = set()
-    for number in citations_in(analytical_body(body)):
+    for number in citations_in(analytical_body(body), set(entries)):
         if number not in entries or canonical_url(entries[number]) not in by_url:
             raise ValueError(f'Citation [{number}] must identify a ledger source')
         cited.add(by_url[canonical_url(entries[number])])

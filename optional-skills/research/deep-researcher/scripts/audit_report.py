@@ -16,13 +16,14 @@ from pathlib import Path
 from typing import NamedTuple
 from urllib.parse import urlsplit
 
+from evidence_ledger import canonical_url
+from report_links import first_url
+
 BIBLIOGRAPHY_HEADING = re.compile(
     r"^#{2,4}\s+(?:Citation Links|References|Bibliography)\s*$", re.IGNORECASE
 )
 CITATION_MARKER = re.compile(r"\[([0-9][0-9,\-–\s]*)\]")
 NUMBERED_ENTRY = re.compile(r"^(\d+)\.\s+(.*)$")
-MARKDOWN_URL = re.compile(r"\]\((https?://[^)]+)\)")
-BARE_URL = re.compile(r"(https?://\S+)")
 FACT_SIGNAL = re.compile(
     r"(?:\b(?:18|19|20)\d{2}\b|\b\d+(?:\.\d+)?%\b|\$\s?\d|"
     r"\b\d+(?:\.\d+)?\s*(?:million|billion|trillion|percent|users?|stars?|days?|years?)\b|"
@@ -42,8 +43,15 @@ class LinkResult(NamedTuple):
 def split_document(text: str) -> tuple[str, list[str]]:
     lines = text.splitlines()
     for index, line in enumerate(lines):
-        if BIBLIOGRAPHY_HEADING.match(line.strip()):
-            return "\n".join(lines[:index]), lines[index + 1 :]
+        if not BIBLIOGRAPHY_HEADING.match(line.strip()):
+            continue
+        level = len(line.lstrip()) - len(line.lstrip().lstrip('#'))
+        end = len(lines)
+        for following in range(index + 1, len(lines)):
+            if re.match(r'^#{1,' + str(level) + r'}\s+', lines[following].strip()):
+                end = following
+                break
+        return '\n'.join(lines[:index] + lines[end:]), lines[index + 1:end]
     return text, []
 
 
@@ -73,10 +81,13 @@ def expand_citation_group(group: str) -> set[int]:
     return result
 
 
-def citations_in(text: str) -> set[int]:
+def citations_in(text: str, known_numbers: set[int] | None = None) -> set[int]:
     result: set[int] = set()
     for match in CITATION_MARKER.finditer(text):
-        result.update(expand_citation_group(match.group(1)))
+        group = match.group(1).strip()
+        if group.isdigit() and 1800 <= int(group) <= 2199 and int(group) not in (known_numbers or set()):
+            continue
+        result.update(expand_citation_group(group))
     return result
 
 
@@ -89,15 +100,13 @@ def bibliography_entries(lines: list[str]) -> tuple[dict[int, str], list[str]]:
         if not match:
             continue
         number = int(match.group(1))
-        url_match = MARKDOWN_URL.search(match.group(2)) or BARE_URL.search(
-            match.group(2)
-        )
-        if not url_match:
+        url = first_url(match.group(2))
+        if not url:
             errors.append(f"Bibliography entry [{number}] has no HTTP(S) URL.")
             continue
         if number in entries:
             errors.append(f"Bibliography entry [{number}] is duplicated.")
-        entries[number] = url_match.group(1).rstrip(".,")
+        entries[number] = url
     return entries, errors
 
 
@@ -163,15 +172,13 @@ def check_url(item: tuple[int, str], timeout: int) -> LinkResult:
 def ledger_urls(path: Path) -> set[str]:
     data = json.loads(path.read_text(encoding="utf-8"))
     return {
-        source.get("canonical_url") or source.get("url")
+        source.get("url") or source.get("canonical_url")
         for source in data.get("sources", [])
     }
 
 
 def normalize_for_match(url: str) -> str:
-    parts = urlsplit(url)
-    path = (parts.path or "/").rstrip("/") or "/"
-    return f"{parts.scheme.lower()}://{parts.netloc.lower()}{path}"
+    return canonical_url(url)
 
 
 def _audit_citations(
@@ -312,8 +319,8 @@ def run(args: argparse.Namespace) -> int:
         print(f"ERROR: report not found: {path}")
         return 1
     body, bibliography_lines = split_document(path.read_text(encoding="utf-8"))
-    cited = citations_in(body)
     entries, parse_errors = bibliography_entries(bibliography_lines)
+    cited = citations_in(body, set(entries))
     errors = list(parse_errors)
     warnings: list[str] = []
     _audit_citations(cited, entries, bibliography_lines, errors, warnings)

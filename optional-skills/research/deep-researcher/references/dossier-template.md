@@ -67,11 +67,6 @@
 |---:|---|---|---|---|---|---|
 | 1 | [Title] | Primary/Secondary/Commentary/Community | YYYY-MM-DD | [Origin/dataset/organization] | Q1, claim C001 | [Conflict, method, access, age] |
 
-### Citation Links
-
-1. [Title](https://example.com/source)
-2. [Title](https://example.org/source)
-
 ## Methodology
 
 - **Search strategy:** [Queries and source targets]
@@ -99,3 +94,9 @@ Trace named organizations and acronym expansions to the source. Describe shared
 underlying origins explicitly; different publishers can repeat one dataset.
 Disclose single-origin limitations beside affected conclusions. Complete the
 hash-bound review in [workflow contracts](workflow-contracts.md) after revisions.
+
+
+## References
+
+1. [Title](https://example.com/source)
+2. [Title](https://example.org/source)

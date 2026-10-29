@@ -181,3 +181,10 @@ remaining warnings and substantive findings; do not end corrections early.
 A passing checker records an attestation. It cannot prove passage authenticity,
 careful reading, correct scope or factual truth. Legacy ledgers remain readable;
 old review packets need `prepare --replace` under this version before completion.
+URL matching is shared with the ledger: document/version query parameters,
+including `ref` and `source`, remain significant; recognized tracking parameters
+are removed. Retrieval always uses the supplied URL. References belong last in
+the report. A bracketed calendar year is prose unless explicitly defined as a
+bibliography number; ordinary citation groups and ranges remain citations.
+Individual `add-claim` writes now validate the staged ledger before saving, just
+as `add-batch` does. Failed additions leave the ledger and assigned IDs unchanged.

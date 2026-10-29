@@ -10,7 +10,7 @@ import json
 import os
 import re
 import tempfile
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -22,8 +22,6 @@ TRACKING_KEYS = {
     "gclid",
     "mc_cid",
     "mc_eid",
-    "ref",
-    "source",
 }
 
 
@@ -33,19 +31,19 @@ def canonical_url(value: str) -> str:
     if parts.scheme not in {"http", "https"} or not parts.netloc:
         raise ValueError(f"Expected an absolute HTTP(S) URL: {value}")
     host = parts.hostname.lower() if parts.hostname else ""
+    if ":" in host:
+        host = f"[{host}]"
     port = parts.port
     if port and not (
         (parts.scheme == "http" and port == 80)
         or (parts.scheme == "https" and port == 443)
     ):
         host = f"{host}:{port}"
-    query = urlencode(
-        sorted(
-            (key, val)
-            for key, val in parse_qsl(parts.query, keep_blank_values=True)
-            if not key.lower().startswith("utm_") and key.lower() not in TRACKING_KEYS
-        )
-    )
+    # Query order and repeated values can identify different documents or versions.
+    query = urlencode([
+        (key, val) for key, val in parse_qsl(parts.query, keep_blank_values=True)
+        if not key.lower().startswith("utm_") and key.lower() not in TRACKING_KEYS
+    ])
     path = re.sub(r"/{2,}", "/", parts.path or "/")
     if path != "/":
         path = path.rstrip("/")
@@ -115,7 +113,7 @@ def resolve_question(data: dict[str, Any], value: str) -> str:
 def make_source(data: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
     normalized = canonical_url(args.url)
     for source in data["sources"]:
-        if source["canonical_url"] == normalized:
+        if canonical_url(source["url"]) == normalized:
             raise SystemExit(
                 f"ERROR: duplicate source URL already has ID {source['id']}"
             )
@@ -209,6 +207,9 @@ def cmd_add_claim(args: argparse.Namespace) -> None:
     data = read_ledger(path)
     claim = make_claim(data, args)
     data["claims"].append(claim)
+    errors, _ = validate(data)
+    if errors:
+        raise ValueError("; ".join(errors))
     write_ledger(path, data)
     print(f"Added claim {claim['id']} ({claim['status']})")
 
@@ -260,7 +261,7 @@ def _validate_question_coverage(
                 warnings.append(
                     f"Source [{source.get('id')}] references unknown question {question!r}."
                 )
-            else:
+            elif source.get("extraction_status") == "extracted":
                 question_sources[question].add(source.get("id"))
     for question, ids in question_sources.items():
         if len(ids) < 2:

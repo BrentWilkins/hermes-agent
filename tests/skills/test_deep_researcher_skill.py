@@ -85,18 +85,19 @@ class ResearchTests(unittest.TestCase):
                         "--title", "Fixture", "--source-type", "primary", "--question", "Q1",
                         "--summary", "A test finding", *args)
 
-    def claim(self, *args):
+    def claim(self, *args, success=True):
         return self.cli("evidence_ledger.py", "add-claim", self.path, "--text", "Narrow claim",
-                        "--question", "Q1", "--status", "supported", "--source", "1,2", *args)
+                        "--question", "Q1", "--status", "supported", "--source", "1,2", *args, success=success)
 
     def test_claim_validation_rejects_unretrieved_and_conflicting_sources(self):
         self.init_ledger()
         self.add_source("https://example.com/a")
         self.add_source("https://example.org/b", "--extraction-status", "failed")
-        self.claim("--counter-source", "2")
-        errors, _ = ledger.validate(ledger.read_ledger(self.path))
-        self.assertTrue(any("both support and counter-evidence" in item for item in errors))
-        self.assertTrue(any("were not extracted: [2]" in item for item in errors))
+        before = self.path.read_bytes()
+        result = self.claim("--counter-source", "2", success=False)
+        self.assertIn("both support and counter-evidence", result.stderr)
+        self.assertIn("were not extracted: [2]", result.stderr)
+        self.assertEqual(self.path.read_bytes(), before)
 
     def test_report_audit_reports_missing_and_duplicate_references(self):
         report = self.base / "report.md"

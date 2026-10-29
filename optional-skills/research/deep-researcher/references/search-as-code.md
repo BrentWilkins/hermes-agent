@@ -69,6 +69,15 @@ Call native `web_extract` on at most five canonical URLs inside a code round
 (three without code), initially with an 8,000-character page limit. Preserve null
 metadata as unknown. Save relevant native cached text with `write_file` when needed,
 and register that file. An initial extraction is not a review of the entire document.
+If the response contains `[TRUNCATED]`, its displayed content is a head/tail view,
+not a full-text cache. Follow the `Full text saved to:` path in the native footer
+with `read_file`; use that actual backend-visible cache path for `passages.py`.
+Do not search a copied head/tail display or assign it original-document line numbers.
+When retaining text, copy the actual native cache file byte for byte into RUN;
+register that copy, not the external cache. A native stored-copy truncation notice
+means even the cache is incomplete. Disclose omitted coverage and use native
+retrieval/browser tools for the needed section. If cache storage failed, report
+that limitation; never recreate a supposedly complete file from clipped output.
 
 For a cache with huge flattened lines, use `terminal`:
 
@@ -97,7 +106,7 @@ available for small manual additions.
 ## 5. Review and finish
 
 Derive the brief, draft from linked evidence, and prepare a semantic review packet.
-Read the actual passages, resolve every claim/assertion and all three global checks,
+Read the actual passages, resolve every claim/assertion and all four global checks,
 then validate the review before marking complete. Never generate blanket approvals
 merely to satisfy the checker. See [workflow contracts](workflow-contracts.md).
 
