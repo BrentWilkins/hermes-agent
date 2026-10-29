@@ -59,13 +59,6 @@ class ResearchTests(unittest.TestCase):
             "## References\n1. [Dataset](https://example.org/data)\n", encoding="utf-8")
         brief = self.cli("evidence_ledger.py", "brief", self.root / "evidence.json").stdout
         (self.root / "evidence-brief.md").write_text(brief, encoding="utf-8")
-        self.cli("semantic_review.py", "prepare", self.root)
-        review_path = self.root / "semantic-review.json"
-        review = json.loads(review_path.read_text())
-        review["reviewer"] = "Synthetic archive fixture reviewer"
-        for check in review["checks"].values():
-            check.update(status="checked", note="Reviewed synthetic report and passages.")
-        review_path.write_text(json.dumps(review), encoding="utf-8")
         (self.root / "raw.txt").write_text("Synthetic retained text.\n" * 10000, encoding="utf-8")
         self.cli("research_run.py", "checkpoint", self.root, "--status", "complete",
                  "--artifact", "raw.txt")

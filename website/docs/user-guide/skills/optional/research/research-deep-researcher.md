@@ -75,7 +75,8 @@ python3 SKILL/scripts/evidence_ledger.py init RUN/evidence.json --topic "Topic" 
 - `evidence_ledger.py add-source|add-claim`: individual additions remain available.
 - `evidence_ledger.py check|brief LEDGER`: validate and derive a compact brief.
 - `passages.py CACHE --term TEXT --max-chars 4000`: bounded literal character windows.
-- `semantic_review.py prepare|show|template|apply|check RUN`: compact, atomic evidence review.
+- `semantic_review.py prepare|show|template|apply|check RUN`: optional audit packet,
+  only when the user requests a separate deeper review.
 - `audit_report.py REPORT --ledger LEDGER --no-live`: offline citation audit.
 - `research_run.py archive|restore`: verified lossless archival and recovery.
 - [Search as code](https://github.com/NousResearch/hermes-agent/blob/main/optional-skills/research/deep-researcher/references/search-as-code.md): tested native-tool discovery,
@@ -235,28 +236,18 @@ or a clean script result does not establish semantic support.
 Fix structural errors, explain unresolved warnings, and remember that a blocked live link alone
 does not invalidate a source already retrieved. Revise once for accuracy and once for usefulness.
 
-Check the executive summary against the findings, then run
-`semantic_review.py prepare RUN`. Review material claims against the retained passages. Use heuristic warnings
-to focus the four-category audit; they are read-only prompts, not decision records. Explicitly check final/preliminary/unknown status, independent
-origins, and named organizations/acronyms; review the rest of the report too.
-Use the compact `show RUN` view and `show RUN --ids C001` for relevant passages.
-Run `template RUN` to create unapproved RUN/review-decisions.json with exact IDs
-and fields. Write four concise critique notes with native `patch`, then use `apply RUN RUN/review-decisions.json`.
-Use the template fields; material claims and heuristic warnings are read-only indexes.
-Record `needs-correction` for an actual problem, fix the report or ledger, then
-prepare a fresh critique. No per-claim or per-word approval records are needed. Complete the reviewer, four global checks
-(finality, independence, entities, numbers), using
-[workflow contracts](https://github.com/NousResearch/hermes-agent/blob/main/optional-skills/research/deep-researcher/references/workflow-contracts.md). Never blanket-approve entries.
-In the numbers critique, check period, population/geography, units, denominator
-and comparison for every material numeric claim. Separate incompatible series. A real qualification states a limitation beside the affected assertion;
-repeating an unsupported claim is not a qualification.
-
-Run `semantic_review.py check RUN`, then
-`research_run.py checkpoint RUN --status complete`. Completion requires the report,
-valid nonempty ledger, brief, cited-source summaries, precise linked passages,
-resolved search receipts, citation audit, and current review. Disclosed single-origin
-limitations can pass; unsupported certainty cannot be cured by a clean script exit.
-Any report/ledger edit requires `prepare RUN --replace` and a fresh review.
+Check the executive summary against the findings. During drafting, verify material
+numbers against their source periods, populations, units, and denominators; trace
+organization names and shared data origins to the retained passages. Read relevant
+footnotes and qualify uncertain inferences beside the affected claim. Correct actual
+errors without generating a separate approval record or rereading every source by default.
+Then run `research_run.py checkpoint RUN --status complete`. Completion requires
+the report, valid nonempty ledger, brief, cited-source summaries, precise linked
+passages, resolved search receipts, and citation audit. A clean script exit does
+not establish factual accuracy.
+Only when the user requests a separate deeper audit, use the optional review packet
+in [workflow contracts](https://github.com/NousResearch/hermes-agent/blob/main/optional-skills/research/deep-researcher/references/workflow-contracts.md). It is not a completion
+requirement and has no demonstrated speed or quality benefit in the current local tests.
 Archive only when requested, following [run management](https://github.com/NousResearch/hermes-agent/blob/main/optional-skills/research/deep-researcher/references/run-management.md).
 Archiving repeats completion checks; keep report.md readable.
 
@@ -282,8 +273,8 @@ After writing the report, run this offline check through `terminal`:
 python3 SKILL/scripts/audit_report.py RUN/report.md --ledger RUN/evidence.json --no-live
 ```
 
-Then run `semantic_review.py check RUN` and the completion checkpoint.
-A clean exit records structural checks and a review attestation; it does not
+Then run the completion checkpoint.
+A clean exit records structural checks; it does not
 certify passage authenticity or the report's conclusions.
 
 Maintained at [BrentWilkins/research-skills](https://github.com/BrentWilkins/research-skills).

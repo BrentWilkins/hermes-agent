@@ -122,35 +122,28 @@ def test_passage_keeps_late_match_in_a_long_line_and_bounds_output(tmp_path):
     assert passage['line_start'] == passage['line_end'] == 1
 
 
-def test_completion_requires_current_semantic_review(tmp_path):
+def test_completion_needs_no_optional_review_packet(tmp_path):
     root = init(tmp_path)
     add_batch(root)
     draft(root)
-    cli('research_run.py', 'checkpoint', root, '--status', 'complete', ok=False)
-    approve(root)
-    cli('semantic_review.py', 'check', root)
-    with (root / 'report.md').open('a') as out:
-        out.write('\nAdditional interpretation.\n')
-    cli('semantic_review.py', 'check', root, ok=False)
-    cli('research_run.py', 'checkpoint', root, '--status', 'complete', ok=False)
-    approve(root)
     cli('research_run.py', 'checkpoint', root, '--status', 'complete')
     data = json.loads((root / 'run_manifest.json').read_text())
     assert data['status'] == 'complete'
-    assert 'semantic-review.json' in data['artifacts']
+    assert 'semantic-review.json' not in data['artifacts']
+    assert 'review_sha256' not in data['completion_checks']
+    cli('research_run.py', 'archive', root)
 
 
-def test_material_review_remains_pending_until_explicitly_checked(tmp_path):
+def test_optional_review_does_not_replace_current_provenance_checks(tmp_path):
     root = init(tmp_path)
     add_batch(root)
-    draft(root, 'Finality is unverified; the numeric finding is single-origin. [1]')
-    cli('semantic_review.py', 'prepare', root)
+    draft(root)
+    approve(root)
+    draft(root, 'Unsupported source citation. [2]')
     cli('semantic_review.py', 'check', root, ok=False)
-    path = approve(root)
-    data = json.loads(path.read_text())
-    data['checks']['finality'].update(status='needs-correction', note='Resolve release status before completion.')
-    path.write_text(json.dumps(data))
+    before = (root / 'run_manifest.json').read_bytes()
     cli('research_run.py', 'checkpoint', root, '--status', 'complete', ok=False)
+    assert (root / 'run_manifest.json').read_bytes() == before
 
 
 def test_discovery_counts_native_queries_and_retains_all_question_associations(tmp_path, monkeypatch):
@@ -282,7 +275,6 @@ def test_stale_completed_report_cannot_be_archived(tmp_path):
     root = init(tmp_path)
     add_batch(root)
     draft(root)
-    approve(root)
     cli('research_run.py', 'checkpoint', root, '--status', 'complete')
     with (root / 'report.md').open('a') as out:
         out.write('\nA changed conclusion.\n')

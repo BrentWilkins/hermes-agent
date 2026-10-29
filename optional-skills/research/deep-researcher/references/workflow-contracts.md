@@ -61,7 +61,7 @@ The whole staged ledger is validated before one atomic replacement. An invalid
 later claim leaves earlier sources uncommitted. An identical retry of a batch ID
 returns its receipt without changing the ledger; a changed payload under the same
 ID is rejected. Use a new batch ID and new record keys for new records. Corrections
-to existing records use `patch`, followed by validation and a fresh semantic review.
+to existing records use `patch`, followed by ledger validation and the report audit.
 Do not concurrently write the same ledger or manifest from multiple workers;
 atomic replacement prevents partial writes, not lost updates between writers.
 
@@ -69,7 +69,11 @@ Independence remains unassessed unless both origin group and explanatory note
 are supplied after tracing the original data. Different domains do not establish
 independence. An honest single-origin limitation is allowed at completion.
 
-## One concise four-part critique
+## Optional deeper audit, only when requested
+
+This is an optional separate audit when the user explicitly requests deeper review.
+Do not run it as part of the default drafting/completion path. Local Qwen tests
+have not demonstrated a speed or quality benefit for mandatory review packets.
 
 Review the completed report against its brief, ledger and retained source text.
 Resolve material errors in facts, scope, names, causal inference and uncertainty.
@@ -120,7 +124,8 @@ python3 SKILL/scripts/research_run.py checkpoint RUN --status complete
 A check can be `pending`, `needs-correction`, or `checked`. For an actual issue,
 record `needs-correction` with its explanation. `apply` saves a valid partial
 critique atomically and reports remaining work; identified corrections block
-completion. Correct material findings before declaring the category checked.
+`semantic_review.py check`, not the structural completion checkpoint. Correct
+material findings before declaring the category checked.
 
 If either report or ledger changes, run `prepare RUN --replace`, refresh the
 template explicitly, and record the critique of the new snapshot. Prior notes
@@ -137,14 +142,14 @@ that dependence rather than counting them as independent corroboration.
 
 Completion still requires a nonempty report and brief, a valid nonempty ledger,
 cited-source summaries, precise linked passages, valid citations, resolved search
-receipts within budget, and four explicit critique notes for current artifacts.
+receipts within budget. No review packet or critique notes are required.
 Archiving repeats these gates. No timer ends substantive corrections early.
 
-These checks prove structural integrity and record a reviewer attestation. They
-cannot establish factual truth or careful reading. The four-part critique is a
-workflow aid, not certification. Inspect the report independently before relying
-on it. Legacy ledgers remain readable; older review packets need a fresh
-`prepare --replace` under this version before completion.
+The completion checks validate structural integrity. The optional critique records
+a reviewer attestation. Neither establishes factual truth or careful reading.
+Legacy ledgers remain readable; to check an older optional review packet, prepare
+a fresh snapshot with `prepare --replace`. Register optional audit artifacts
+explicitly if the user wants them included in an archive.
 
 URL matching is shared with the ledger: document/version query parameters,
 including `ref` and `source`, remain significant; recognized tracking parameters

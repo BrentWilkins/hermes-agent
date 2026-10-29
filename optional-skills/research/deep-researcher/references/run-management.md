@@ -47,12 +47,13 @@ unlogged calls or measure backend billing. Pending reservations must be reconcil
 
 ## Complete and archive
 
-Finish the semantic and structural report audit before marking complete. Completion
-requires report.md, a valid nonempty evidence.json, evidence-brief.md, cited-source
-summaries, precise linked passages, resolved query receipts, and a current
-semantic-review.json. Follow [workflow contracts](workflow-contracts.md) to prepare
-and review the packet. Old runs need those artifacts too. A recorded review is
-an attestation, not proof of truth. Archiving repeats the same gates.
+Check the report against retained evidence and fix material errors before marking
+complete. Completion requires report.md, a valid nonempty evidence.json,
+evidence-brief.md, cited-source summaries, precise linked passages, resolved query
+receipts, and valid citations. Archiving repeats these structural gates.
+No semantic-review.json or approval notes are required. If the user requests a
+separate deeper audit, see [workflow contracts](workflow-contracts.md). Register
+its artifacts explicitly if they should be archived. Script success is not proof of truth.
 
 ```sh
 python3 SKILL/scripts/research_run.py checkpoint RUN --status complete --artifact report.md --artifact evidence.json --artifact evidence-brief.md

@@ -26,7 +26,8 @@ repeats the same dataset. Independent replication was not found; generalizabilit
 For atomic JSON ingestion of the same source/claim structure, use the batch schema
 in [workflow contracts](workflow-contracts.md); a source key can be reused by later
 claims without guessing numeric IDs. Save the derived brief, draft the report,
-and prepare the semantic review packet. Qualify the unresolved generalization with
-the limitation actually present in the report; do not approve it as verified.
-Review finality, shared origins, and names, then check the packet before completion.
+and qualify the unresolved generalization with the limitation actually supported
+by the evidence. Check finality, shared origins, names, and numeric scope during
+drafting, then run the citation audit and completion checkpoint. No separate
+review packet is required.
 The dossier is not complete merely because the ledger command above succeeds.

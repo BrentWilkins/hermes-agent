@@ -121,7 +121,7 @@ def checkpoint(args):
     if data["status"] == "complete":
         from completion_checks import require_completion
         data["completion_checks"] = require_completion(root, data)
-        for name in (data["report"], "evidence.json", "evidence-brief.md", "semantic-review.json"):
+        for name in (data["report"], "evidence.json", "evidence-brief.md"):
             if name not in data["artifacts"]:
                 data["artifacts"].append(name)
         data["next_action"] = ""
@@ -162,7 +162,10 @@ def archive(args):
     if data["status"] != "complete":
         raise ValueError("Only completed, inactive runs can be archived")
     from completion_checks import require_completion
-    require_completion(root, data)
+    current = require_completion(root, data)
+    recorded = data.get("completion_checks") or {}
+    if any(recorded.get(key) != current[key] for key in ("report_sha256", "ledger_sha256")):
+        raise ValueError("Report or ledger changed; checkpoint complete again before archiving")
     report = safe_path(root, data["report"])
     if not report.is_file() or not report.stat().st_size:
         raise ValueError("A nonempty final report is required")

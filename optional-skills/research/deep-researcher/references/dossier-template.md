@@ -92,8 +92,8 @@ Check whether each dataset/result is explicitly final, preliminary, partial, or
 unknown in the retained source; preserve its population and reporting period.
 Trace named organizations and acronym expansions to the source. Describe shared
 underlying origins explicitly; different publishers can repeat one dataset.
-Disclose single-origin limitations beside affected conclusions. Complete the
-hash-bound review in [workflow contracts](workflow-contracts.md) after revisions.
+Disclose single-origin limitations beside affected conclusions. Correct material
+errors directly; a separate review packet is optional when requested by the user.
 
 
 ## References

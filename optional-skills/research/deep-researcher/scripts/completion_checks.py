@@ -38,7 +38,6 @@ def require_completion(root: Path, manifest: dict) -> dict:
     from audit_report import analytical_body, bibliography_entries, citations_in, run, split_document
     from evidence_ledger import canonical_url, read_ledger, validate
     from research_run import digest, now, safe_path
-    from semantic_review import check
     report = safe_path(root, manifest['report'])
     ledger_path = safe_path(root, 'evidence.json')
     brief = safe_path(root, 'evidence-brief.md')
@@ -69,9 +68,7 @@ def require_completion(root: Path, manifest: dict) -> dict:
     if result:
         raise ValueError('Report audit failed: ' + audit.getvalue())
     _budget(manifest)
-    reviewed = check(root)
     return {'checked_at': now(), 'report_sha256': digest(report), 'ledger_sha256': digest(ledger_path),
-            'review_sha256': digest(safe_path(root, 'semantic-review.json')),
-            'reviewer': reviewed['reviewer'], 'ledger_warnings': warnings,
+            'ledger_warnings': warnings,
             'report_warnings': [line for line in audit.getvalue().splitlines() if line.startswith('WARN:')],
-            'note': 'Structural gates passed and a current semantic-review attestation is recorded; this is not proof of truth.'}
+            'note': 'Structural gates passed; this is not proof of source truth or research quality.'}

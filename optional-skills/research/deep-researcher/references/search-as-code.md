@@ -105,10 +105,10 @@ available for small manual additions.
 
 ## 5. Review and finish
 
-Derive the brief, draft from linked evidence, and prepare a semantic review packet.
-Read the actual passages, resolve material claims and all four global checks,
-then validate the review before marking complete. Never generate blanket approvals
-merely to satisfy the checker. See [workflow contracts](workflow-contracts.md).
+Derive the brief and draft from linked evidence. Check material facts and scope
+against the actual passages while drafting, then run the citation audit and
+completion checkpoint. Do not create a separate review packet by default. A user
+may request the deeper audit in [workflow contracts](workflow-contracts.md).
 
 Batching changes orchestration and context usage, not evidence standards. Measure
 elapsed time and result quality with the same model, effective budget, services,
