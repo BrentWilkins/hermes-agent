@@ -54,7 +54,7 @@ def compact(root: Path, ids: set[str], evidence_ids: set[str], max_chars: int) -
     result = {'report_sha256': expected['report_sha256'], 'ledger_sha256': expected['ledger_sha256'],
               'checks': review['checks'], 'items': [_brief(item) for item in chosen],
               'passages': [], 'errors': errors, 'omitted': {'items': [], 'passages': [], 'errors': 0},
-              'next': 'Write explicit decisions JSON; apply RUN FILE. Correct report/ledger with native patch, then prepare RUN --replace. Never approve automatically.'}
+              'next': 'Run template RUN; edit its unapproved review-decisions.json; apply RUN RUN/review-decisions.json. Correct report/ledger with native patch, then prepare RUN --replace. Never approve automatically.'}
     for key in sorted(passages):
         evidence = expected['evidence'][key]
         cap = max(800, (max_chars - 1500) // max(1, len(passages)))
@@ -92,6 +92,26 @@ def prepare(args) -> dict:
     return compact(args.run, set(), set(), 12000)
 
 
+
+def template(args) -> dict:
+    from research_run import load, safe_path
+    from review_validation import inspect_review
+    expected, review, _ = inspect_review(args.run)
+    protected = set(load(args.run)['artifacts']) | {'report.md', 'evidence.json', 'evidence-brief.md', 'semantic-review.json'}
+    if args.output in protected:
+        raise ValueError('Decision templates cannot overwrite research artifacts')
+    path = safe_path(args.run, args.output)
+    if path.exists() and not args.replace:
+        raise ValueError('Decision template exists; edit it or use --replace explicitly')
+    result = {key: expected[key] for key in ('report_sha256', 'ledger_sha256')}
+    result.update(reviewer=review['reviewer'], checks=copy.deepcopy(review['checks']))
+    for label in ('claims', 'assertions'):
+        keys = {'id', 'status', 'note', 'evidence_ids', 'qualification', 'scope_note'}
+        result[label] = [{key: value for key, value in item.items() if key in keys} for item in review[label]]
+    atomic_json(path, result)
+    return {'path': str(path), 'automatically_approved': 0,
+            'next': 'Edit explicit decisions and checklist notes with native patch; apply RUN FILE, check RUN, then checkpoint complete.'}
+
 def _updates(staged: dict, payload: dict, label: str) -> None:
     updates = payload.get(label, [])
     if not isinstance(updates, list):
@@ -105,6 +125,9 @@ def _updates(staged: dict, payload: dict, label: str) -> None:
         key = update.get('id')
         if not isinstance(key, str) or key not in existing or key in seen:
             raise ValueError(f'Unknown or repeated {label} decision ID: {key!r}')
+        if update.get('status') == 'pending' and not any(update.get(k) for k in ('note', 'qualification', 'scope_note')):
+            seen.add(key)
+            continue
         if update.get('status') not in {'verified', 'qualified'}:
             raise ValueError(f'{key}: set an explicit verified or qualified decision')
         seen.add(key)
@@ -118,7 +141,7 @@ def apply_decisions(args) -> dict:
     payload = json.loads(args.payload.read_text(encoding='utf-8'))
     allowed = {'report_sha256', 'ledger_sha256', 'reviewer', 'checks', 'claims', 'assertions'}
     if not isinstance(payload, dict) or set(payload) - allowed:
-        raise ValueError('Decision payload allows only hashes, reviewer, checks, claims and assertions')
+        raise ValueError('Decision payload allows only hashes, reviewer, checks, claims and assertions. Use template RUN to generate the exact format')
     if any(payload.get(key) != expected[key] for key in ('report_sha256', 'ledger_sha256')):
         raise ValueError('Decision hashes are stale or missing; show RUN for current hashes, then review the current material')
     staged = copy.deepcopy(current)
@@ -127,7 +150,10 @@ def apply_decisions(args) -> dict:
     checks = payload.get('checks', {})
     if not isinstance(checks, dict) or set(checks) - staged['checks'].keys():
         raise ValueError('Unknown review checklist entries')
-    staged['checks'].update(checks)
+    for key, decision in checks.items():
+        if isinstance(decision, dict) and decision.get('status') == 'pending' and not decision.get('note'):
+            continue
+        staged['checks'][key] = decision
     for label in ('claims', 'assertions'):
         _updates(staged, payload, label)
     errors = review_errors(expected, staged, allow_pending=True)

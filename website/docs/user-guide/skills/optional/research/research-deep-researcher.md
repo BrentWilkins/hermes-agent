@@ -75,7 +75,7 @@ python3 SKILL/scripts/evidence_ledger.py init RUN/evidence.json --topic "Topic" 
 - `evidence_ledger.py add-source|add-claim`: individual additions remain available.
 - `evidence_ledger.py check|brief LEDGER`: validate and derive a compact brief.
 - `passages.py CACHE --term TEXT --max-chars 4000`: bounded literal character windows.
-- `semantic_review.py prepare|show|apply|check RUN`: compact, atomic evidence review.
+- `semantic_review.py prepare|show|template|apply|check RUN`: compact, atomic evidence review.
 - `audit_report.py REPORT --ledger LEDGER --no-live`: offline citation audit.
 - `research_run.py archive|restore`: verified lossless archival and recovery.
 - [Search as code](https://github.com/NousResearch/hermes-agent/blob/main/optional-skills/research/deep-researcher/references/search-as-code.md): tested native-tool discovery,
@@ -240,8 +240,9 @@ Check the executive summary against the findings, then run
 the retained passages. Explicitly check final/preliminary/unknown status, independent
 origins, and named organizations/acronyms; review the rest of the report too.
 Use the compact `show RUN` view and `show RUN --ids C001` for relevant passages.
-Save explicit decisions with `apply RUN RUN/decisions.json`; do not rewrite the
-packet or generate update loops. Complete the reviewer, four global checks
+Run `template RUN` to create unapproved RUN/review-decisions.json with exact IDs
+and fields. Fill it with native `patch`, then use `apply RUN RUN/review-decisions.json`.
+Do not invent a decision schema, rewrite the packet, or generate update loops. Complete the reviewer, four global checks
 (finality, independence, entities, numbers), and per-entry decisions using
 [workflow contracts](https://github.com/NousResearch/hermes-agent/blob/main/optional-skills/research/deep-researcher/references/workflow-contracts.md). Never blanket-approve entries.
 Numeric claims need a scope note covering period,

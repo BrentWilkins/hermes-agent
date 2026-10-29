@@ -21,6 +21,26 @@ def ordinary(text: str) -> bool:
     return normalized(text) in ORDINARY or bool(re.fullmatch(r'(?:H[12]|Q[1-4]|FY[0-9]{2,4})', text))
 
 
+
+def label_spans(line: str) -> list[tuple[int, int]]:
+    spans = []
+    if line.lstrip().startswith('>'):
+        spans.extend(match.span() for match in re.finditer(r'\b(?:Mode|Sources|Scope|As-of)(?:\*\*)?\s*:', line))
+    spans.extend(match.span() for match in re.finditer(
+        r'\bConfidence(?:\*\*)?\s*:\s*(?:\*\*)?(?:High|Medium|Low)(?:[–-](?:High|Medium|Low))?', line))
+    label = re.match(r'^\s*(?:[0-9]+\.\s*|[-*]\s*)?\*\*([^*\n]+)\*\*', line)
+    if label:
+        words = label.group(1).strip(': .').split()
+        ordinary_labels = {'Price', 'Policy', 'Affordability', 'Installer', 'Demand', 'Confidence'}
+        if words and words[0] in ordinary_labels and not any(word[:1].isupper() for word in words[1:]):
+            spans.append(label.span())
+    return spans
+
+
+def known_name(text: str, known: str) -> bool:
+    names = text.split('/')
+    return all(re.search(r'(?<!\w)' + re.escape(normalized(name)) + r'(?!\w)', known) for name in names)
+
 def assertions(report: str, data: dict) -> list[dict]:
     known = normalized(' '.join(str(source.get(key, '')) for source in data['sources']
                                for key in ('title', 'publisher', 'author')) + ' ' +
@@ -33,17 +53,20 @@ def assertions(report: str, data: dict) -> list[dict]:
             in_fence = not in_fence
         if stripped.lower() in {'## references', '## citation links', '## bibliography'}:
             break
-        if in_fence or stripped.startswith('#'):
+        if in_fence or stripped.startswith('#') or stripped.startswith('*Prepared with the Hermes Deep Researcher workflow.'):
             continue
         for kind, pattern in SIGNALS.items():
             matches = list(pattern.finditer(line))
             if matches:
                 found.append(_assertion(kind, matches[0].group(), number, line))
+        labels = label_spans(line)
         for match in ENTITY.finditer(line):
-            text = re.sub(r'^(?:The|This|These|Those|Our|Their) ', '', match.group())
+            if any(start <= match.start() and match.end() <= end for start, end in labels):
+                continue
+            text = re.sub(r'^(?:The|This|These|Those|Our|Their|Its) ', '', match.group())
             # Sentence-initial capitalization is not a named-entity assertion.
             initial = not line[:match.start()].strip(' -*|') or line[:match.start()].rstrip().endswith(('.', '!', '?'))
-            if re.search(r'(?<!\w)' + re.escape(normalized(text)) + r'(?!\w)', known) or ordinary(text) or (initial and len(text.split()) == 1 and not text.isupper() and '/' not in text):
+            if known_name(text, known) or ordinary(text) or (initial and len(text.split()) == 1 and not text.isupper() and '/' not in text):
                 continue
             found.append(_assertion('entity', text, number, line))
     return list({(item['kind'], item['line'], normalized(item['text'])): item for item in found}.values())

@@ -94,8 +94,13 @@ labels are filtered; named organizations and unknown acronyms still need review.
 Repeated same-line names share one review item; distinct lines retain distinct
 contexts. Report headings, code fences and references are not scanned as claims.
 
-Create RUN/decisions.json with `write_file`, using the hashes and actual IDs from
-`show`. This synthetic example illustrates the format, not an automatic approval:
+Run `semantic_review.py template RUN` to write RUN/review-decisions.json with the
+current hashes, IDs, linked passage IDs and empty decisions. It approves nothing.
+Edit the file with native `patch`; do not invent field names or build update code.
+Blank pending template entries are left pending by `apply`; completion still
+requires every decision and all four checks. Existing templates are never
+replaced without `--replace`; report, ledger and registered artifacts are protected.
+This synthetic example illustrates the format, not an automatic approval:
 
 ```json
 {
@@ -120,7 +125,7 @@ Create RUN/decisions.json with `write_file`, using the hashes and actual IDs fro
 ```
 
 ```sh
-python3 SKILL/scripts/semantic_review.py apply RUN RUN/decisions.json
+python3 SKILL/scripts/semantic_review.py apply RUN RUN/review-decisions.json
 python3 SKILL/scripts/semantic_review.py check RUN
 ```
 

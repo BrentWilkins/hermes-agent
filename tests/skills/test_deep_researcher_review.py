@@ -169,3 +169,41 @@ def test_article_prefix_keeps_known_names_known_and_flags_unknown_agency(dossier
     names = {i['text'] for i in packet['assertions'] if i['kind'] == 'entity'}
     assert 'Dataset' not in names and 'The Dataset' not in names
     assert 'Alpine Research Agency' in names
+
+
+def test_template_writes_valid_unapproved_decisions_without_overwriting(dossier):
+    packet = prepare(dossier)
+    result = json.loads(cli('template', dossier).stdout)
+    path = Path(result['path'])
+    draft = json.loads(path.read_text())
+    assert draft['report_sha256'] == packet['report_sha256']
+    assert [i['id'] for i in draft['claims']] == [i['id'] for i in packet['claims']]
+    assert all(i['status'] == 'pending' for i in draft['claims'] + draft['assertions'])
+    cli('template', dossier, ok=False)
+    draft['reviewer'] = 'Fixture reviewer'
+    path.write_text(json.dumps(draft))
+    assert not json.loads(cli('apply', dossier, path).stdout)['ready']
+    ready(draft)
+    path.write_text(json.dumps(draft))
+    cli('apply', dossier, path)
+    cli('check', dossier)
+
+
+def test_template_cannot_replace_core_artifacts(dossier):
+    prepare(dossier)
+    path = dossier / 'evidence.json'
+    before = path.read_bytes()
+    cli('template', dossier, '--output', 'evidence.json', '--replace', ok=False)
+    assert path.read_bytes() == before
+
+
+def test_entity_review_ignores_report_labels_but_keeps_substantive_names(dossier):
+    text = ('> **Mode:** standard | **Sources:** 1 | **Scope:** fixture\n'
+            'Its March update reports growth. **Confidence: Medium–High**. [1]\n'
+            '1. **Affordability.** MCEI comments on the result. [1]\n'
+            '2. **Installer capacity/cost.** The Alpine Research Agency disagrees. [1]\n'
+            '*Prepared with the Hermes Deep Researcher workflow. Citations establish provenance; confidence reflects independence.*')
+    packet = prepare(dossier, text)
+    names = {i['text'] for i in packet['assertions'] if i['kind'] == 'entity'}
+    assert not names.intersection({'Mode', 'Sources', 'Scope', 'Its March', 'Medium', 'High', 'Affordability', 'Installer', 'Hermes Deep Researcher'})
+    assert {'MCEI', 'Alpine Research Agency'} <= names

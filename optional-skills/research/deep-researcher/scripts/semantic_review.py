@@ -8,7 +8,7 @@ from pathlib import Path
 
 from review_signals import assertions
 
-KIND = 'deep-research-semantic-review-v2'
+KIND = 'deep-research-semantic-review-v3'
 CHECKS = ('finality', 'independence', 'entities', 'numbers')
 
 
@@ -55,7 +55,7 @@ def check(root: Path) -> dict:
 
 def main() -> None:
     from research_run import load
-    from review_commands import apply_decisions, prepare, show
+    from review_commands import apply_decisions, prepare, show, template
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='action', required=True)
     command = commands.add_parser('prepare', help='Bind current artifacts and show compact pending review items')
@@ -66,6 +66,10 @@ def main() -> None:
     command.add_argument('--ids', default='', help='Comma-separated claim or assertion IDs')
     command.add_argument('--evidence', default='', help='Comma-separated passage IDs')
     command.add_argument('--max-chars', type=int, default=12000)
+    command = commands.add_parser('template', help='Write exact decision IDs and fields without approving anything')
+    command.add_argument('run', type=Path)
+    command.add_argument('--output', default='review-decisions.json', help='Run-relative output path')
+    command.add_argument('--replace', action='store_true')
     command = commands.add_parser('apply', help='Atomically apply explicit JSON decisions; never approve automatically')
     command.add_argument('run', type=Path)
     command.add_argument('payload', type=Path)
@@ -75,7 +79,7 @@ def main() -> None:
     try:
         if load(args.run)['status'] == 'archived':
             raise ValueError('Restore the run before reviewing it')
-        handlers = {'prepare': prepare, 'show': show, 'apply': apply_decisions,
+        handlers = {'prepare': prepare, 'show': show, 'template': template, 'apply': apply_decisions,
                     'check': lambda args: check(args.run)}
         print(json.dumps(handlers[args.action](args), ensure_ascii=False))
     except (ValueError, OSError, KeyError) as exc:
